@@ -1,4 +1,5 @@
 use std::ffi::CString;
+use std::ops::Deref;
 use std::os::raw::c_char;
 
 use ash::{Entry, vk};
@@ -14,12 +15,21 @@ pub struct Instance {
 }
 
 #[cfg(debug_assertions)]
-const VALIDATION_LAYERS: [&str; 1] = [
+pub const VALIDATION_LAYERS: [&str; 1] = [
     "VK_LAYER_KHRONOS_validation"
 ];
 #[cfg(not(debug_assertions))]
-const VALIDATION_LAYERS: [&str; 0] = [];
+pub const VALIDATION_LAYERS: [&str; 0] = [];
 
+impl Deref for Instance {
+    type Target = ash::Instance;
+
+    fn deref(&self) -> &Self::Target {
+        &self.instance
+    }
+}
+
+// creation
 impl Instance {
     pub fn new(entry: &Entry) -> Instance {
         if !are_desired_validation_layers_supported(entry) {
@@ -65,14 +75,13 @@ impl Instance {
             None
         };
 
-
         Instance {
             instance,
             debug_layer,
         }
     }
 }
-
+// destruction
 impl Drop for Instance {
     fn drop(&mut self) {
         unsafe {
@@ -80,6 +89,73 @@ impl Drop for Instance {
         }
     }
 }
+
+// Custom functions in Instance
+impl Instance {
+    pub fn pick_physical_device(&self) -> vk::PhysicalDevice {
+        let physical_devices = unsafe { self.instance.enumerate_physical_devices() }
+            .expect("Couldn't enumerate physical devices");
+        if physical_devices.is_empty() {
+            panic!("Failed to find GPUs with Vulkan support!");
+        }
+
+        let picked_device = physical_devices.into_iter()
+            .max_by_key(|device| self.rate_device_suitability(*device));
+
+        picked_device.expect("Failed to find suitable physical device")
+    }
+
+    pub fn find_queue_families(&self, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
+        let queue_families = unsafe { self.instance.get_physical_device_queue_family_properties(physical_device) };
+        let mut queue_family_indices = QueueFamilyIndices {
+            graphics_family: None
+        };
+        for (index, queue_family) in queue_families.iter().enumerate() {
+            if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+                queue_family_indices.graphics_family = Some(index as u32);
+            }
+
+            if queue_family_indices.is_complete() {
+                break;
+            }
+        }
+        queue_family_indices
+    }
+
+    fn rate_device_suitability(&self, physical_device: vk::PhysicalDevice) -> Option<usize> {
+        let properties = unsafe { self.instance.get_physical_device_properties(physical_device) };
+        let features = unsafe { self.instance.get_physical_device_features(physical_device) };
+
+        if features.geometry_shader != 1 {
+            return None;
+        }
+
+        let mut score = 0usize;
+
+        if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
+            score += 1000;
+        }
+        score += properties.limits.max_image_dimension2_d as usize;
+
+        let queue_family_indices = self.find_queue_families(physical_device);
+        if !queue_family_indices.is_complete() {
+            return None
+        }
+
+        Some(score)
+    }
+}
+
+pub struct QueueFamilyIndices {
+    pub graphics_family: Option<u32>,
+}
+
+impl QueueFamilyIndices {
+    pub fn is_complete(&self) -> bool {
+        self.graphics_family.is_some()
+    }
+}
+
 
 
 fn are_desired_validation_layers_supported(entry: &Entry) -> bool {
@@ -101,7 +177,6 @@ fn required_extension_names() -> Vec<*const i8> {
     vec![
         khr::Surface::name().as_ptr(),
         khr::Win32Surface::name().as_ptr(),
-        #[cfg(debug_assertions)]
-            ext::DebugUtils::name().as_ptr(),
+        #[cfg(debug_assertions)] ext::DebugUtils::name().as_ptr(),
     ]
 }

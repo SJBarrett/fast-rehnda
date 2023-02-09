@@ -9,6 +9,7 @@ const WINDOW_HEIGHT: u32 = 600;
 pub struct Application {
     entry: ash::Entry,
     instance: rvk::Instance,
+    device: rvk::Device,
 }
 
 // https://github.com/unknownue/vulkan-tutorial-rust/blob/master/src/tutorials/00_base_code.rs
@@ -16,10 +17,12 @@ impl Application {
     pub fn new() -> Application {
         let entry = ash::Entry::linked();
         let instance =  rvk::Instance::new(&entry);
+        let device = rvk::Device::create(&instance, instance.pick_physical_device());
 
         Application {
             entry,
             instance,
+            device,
         }
     }
 
