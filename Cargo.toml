@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.37.2"
+ash = { version = "0.37.2", default_features = false, features = ["linked", "debug"] }
 glam = "0.22"
 winit = "0.27.5"
+raw-window-handle = "0.5.0"
 
 log = "0.4"
 simplelog = "0.12"
