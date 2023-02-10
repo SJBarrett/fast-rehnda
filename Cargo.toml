@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 ash = { version = "0.37.2", default_features = false, features = ["linked", "debug"] }
+ash-window = "0.12.0"
 glam = "0.22"
 winit = "0.27.5"
 raw-window-handle = "0.5.0"

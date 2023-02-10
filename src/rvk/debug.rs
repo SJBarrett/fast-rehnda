@@ -53,7 +53,7 @@ unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
     callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    user_data: *mut c_void,
+    _user_data: *mut c_void,
 ) -> vk::Bool32 {
     let message_type = match message_type {
         vk::DebugUtilsMessageTypeFlagsEXT::GENERAL => "General",
@@ -62,6 +62,12 @@ unsafe extern "system" fn vulkan_debug_callback(
         _ => "Other",
     };
     let message = CStr::from_ptr((*callback_data).p_message);
+
+    // TODO fix warn message logged on creating device that prints
+    // "vkGetPhysicalDeviceProperties2KHR: Emulation found unrecognized structure type in pProperties->pNext - this struct will be ignored"
+    if message.to_str().unwrap().contains("vkGetPhysicalDeviceProperties2KHR: Emulation found unrecognized structure type in pProperties->pNext - this struct will be ignored") {
+        return vk::FALSE
+    }
     match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => debug!("[VkDebug][{}] {:?}", message_type, message),
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => info!("[VkDebug][{}] {:?}", message_type, message),

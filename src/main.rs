@@ -12,8 +12,7 @@ fn main() {
     TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
 
     let event_loop = EventLoop::new();
-    let application = Application::new();
-    let window = Application::init_window(&event_loop);
+    let application = Application::new(&event_loop);
 
-    application.main_loop(event_loop, window);
+    application.main_loop(event_loop);
 }

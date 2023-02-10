@@ -5,6 +5,7 @@ use std::os::raw::c_char;
 use ash::{Entry, vk};
 use ash::extensions::{ext, khr};
 use log::info;
+use crate::rvk;
 
 use crate::rvk::debug::DebugLayer;
 use crate::rvk::utility::vk_cstr_to_string;
@@ -92,7 +93,7 @@ impl Drop for Instance {
 
 // Custom functions in Instance
 impl Instance {
-    pub fn pick_physical_device(&self) -> vk::PhysicalDevice {
+    pub fn pick_physical_device(&self, surface: &rvk::Surface) -> vk::PhysicalDevice {
         let physical_devices = unsafe { self.instance.enumerate_physical_devices() }
             .expect("Couldn't enumerate physical devices");
         if physical_devices.is_empty() {
@@ -100,17 +101,21 @@ impl Instance {
         }
 
         let picked_device = physical_devices.into_iter()
-            .max_by_key(|device| self.rate_device_suitability(*device));
+            .max_by_key(|device| self.rate_device_suitability(surface, *device));
 
         picked_device.expect("Failed to find suitable physical device")
     }
 
-    pub fn find_queue_families(&self, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
+    pub fn find_queue_families(&self, surface: &rvk::Surface, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
         let queue_families = unsafe { self.instance.get_physical_device_queue_family_properties(physical_device) };
         let mut queue_family_indices = QueueFamilyIndices {
-            graphics_family: None
+            graphics_family: None,
+            present_family: None,
         };
         for (index, queue_family) in queue_families.iter().enumerate() {
+            if surface.get_physical_device_surface_support(physical_device, index as u32).unwrap() {
+                queue_family_indices.present_family = Some(index as u32);
+            }
             if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 queue_family_indices.graphics_family = Some(index as u32);
             }
@@ -122,7 +127,7 @@ impl Instance {
         queue_family_indices
     }
 
-    fn rate_device_suitability(&self, physical_device: vk::PhysicalDevice) -> Option<usize> {
+    fn rate_device_suitability(&self, surface: &rvk::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {
         let properties = unsafe { self.instance.get_physical_device_properties(physical_device) };
         let features = unsafe { self.instance.get_physical_device_features(physical_device) };
 
@@ -137,7 +142,7 @@ impl Instance {
         }
         score += properties.limits.max_image_dimension2_d as usize;
 
-        let queue_family_indices = self.find_queue_families(physical_device);
+        let queue_family_indices = self.find_queue_families(surface, physical_device);
         if !queue_family_indices.is_complete() {
             return None
         }
@@ -148,11 +153,12 @@ impl Instance {
 
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
+    pub present_family: Option<u32>,
 }
 
 impl QueueFamilyIndices {
     pub fn is_complete(&self) -> bool {
-        self.graphics_family.is_some()
+        self.graphics_family.is_some() && self.present_family.is_some()
     }
 }
 
