@@ -5,10 +5,10 @@ use std::os::raw::c_char;
 use ash::{Entry, vk};
 use ash::extensions::{ext, khr};
 use log::info;
-use crate::rvk;
+use crate::etna;
 
-use crate::rvk::debug::DebugLayer;
-use crate::rvk::utility::vk_cstr_to_string;
+use crate::etna::debug::DebugLayer;
+use crate::etna::utility::vk_cstr_to_string;
 
 pub struct Instance {
     instance: ash::Instance,
@@ -93,7 +93,7 @@ impl Drop for Instance {
 
 // Custom functions in Instance
 impl Instance {
-    pub fn pick_physical_device(&self, surface: &rvk::Surface) -> vk::PhysicalDevice {
+    pub fn pick_physical_device(&self, surface: &etna::Surface) -> vk::PhysicalDevice {
         let physical_devices = unsafe { self.instance.enumerate_physical_devices() }
             .expect("Couldn't enumerate physical devices");
         if physical_devices.is_empty() {
@@ -106,7 +106,7 @@ impl Instance {
         picked_device.expect("Failed to find suitable physical device")
     }
 
-    pub fn find_queue_families(&self, surface: &rvk::Surface, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
+    pub fn find_queue_families(&self, surface: &etna::Surface, physical_device: vk::PhysicalDevice) -> QueueFamilyIndices {
         let queue_families = unsafe { self.instance.get_physical_device_queue_family_properties(physical_device) };
         let mut queue_family_indices = QueueFamilyIndices {
             graphics_family: None,
@@ -127,7 +127,7 @@ impl Instance {
         queue_family_indices
     }
 
-    fn rate_device_suitability(&self, surface: &rvk::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {
+    fn rate_device_suitability(&self, surface: &etna::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {
         let properties = unsafe { self.instance.get_physical_device_properties(physical_device) };
         let features = unsafe { self.instance.get_physical_device_features(physical_device) };
 

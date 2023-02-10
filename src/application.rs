@@ -1,7 +1,7 @@
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
-use crate::rvk;
+use crate::etna;
 
 const WINDOW_TITLE: &str = "Fast Rehnda";
 const WINDOW_WIDTH: u32 = 800;
@@ -10,9 +10,9 @@ const WINDOW_HEIGHT: u32 = 600;
 pub struct Application {
     window: winit::window::Window,
     entry: ash::Entry,
-    instance: rvk::Instance,
-    device: rvk::Device,
-    surface: rvk::Surface,
+    instance: etna::Instance,
+    device: etna::Device,
+    surface: etna::Surface,
 }
 
 // https://github.com/unknownue/vulkan-tutorial-rust/blob/master/src/tutorials/00_base_code.rs
@@ -24,9 +24,9 @@ impl Application {
             .build(event_loop)
             .expect("Failed to create window.");
         let entry = ash::Entry::linked();
-        let instance = rvk::Instance::new(&entry);
-        let surface = rvk::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
-        let device = rvk::Device::create(&instance, &surface, instance.pick_physical_device(&surface));
+        let instance = etna::Instance::new(&entry);
+        let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
+        let device = etna::Device::create(&instance, &surface, instance.pick_physical_device(&surface));
 
         Application {
             window,

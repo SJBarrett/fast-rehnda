@@ -2,9 +2,9 @@ use std::os::raw::c_char;
 
 use ash::vk;
 use ash::vk::PhysicalDevice;
-use crate::rvk;
+use crate::etna;
 
-use crate::rvk::{VALIDATION_LAYERS};
+use crate::etna::{VALIDATION_LAYERS};
 
 pub struct Device {
     device: ash::Device,
@@ -13,7 +13,7 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn create(instance: &rvk::Instance, surface: &rvk::Surface, physical_device: PhysicalDevice) -> Device {
+    pub fn create(instance: &etna::Instance, surface: &etna::Surface, physical_device: PhysicalDevice) -> Device {
         let queue_indices = instance.find_queue_families(surface, physical_device);
         let graphics_family_queue_index = queue_indices.graphics_family.expect("Graphics family must be available");
         let present_family_queue_index = queue_indices.present_family.expect("Present family must be available");
