@@ -1,15 +1,24 @@
+use std::ops::Deref;
 use std::os::raw::c_char;
 
 use ash::vk;
 use ash::vk::PhysicalDevice;
 use crate::etna;
 
-use crate::etna::{VALIDATION_LAYERS};
+use crate::etna::{DEVICE_EXTENSIONS, VALIDATION_LAYERS};
 
 pub struct Device {
     device: ash::Device,
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+}
+
+impl Deref for Device {
+    type Target = ash::Device;
+
+    fn deref(&self) -> &Self::Target {
+        &self.device
+    }
 }
 
 impl Device {
@@ -28,9 +37,11 @@ impl Device {
             .queue_priorities(&[1.0]).build())
             .collect();
         let validation_layer_names = VALIDATION_LAYERS.map(|layer| layer.as_ptr() as *const c_char);
+        let device_extension_names = DEVICE_EXTENSIONS.map(|extension| extension.as_ptr() as *const c_char);
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(queue_create_infos.as_slice())
-            .enabled_layer_names(validation_layer_names.as_slice());
+            .enabled_layer_names(validation_layer_names.as_slice())
+            .enabled_extension_names(device_extension_names.as_slice());
 
 
         let device = unsafe { (*instance).create_device(physical_device, &device_create_info, None) }

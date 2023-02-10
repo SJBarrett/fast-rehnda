@@ -1,4 +1,6 @@
-use std::ffi::CString;
+use std::clone::Clone;
+use std::collections::HashSet;
+use std::ffi::{CStr, CString};
 use std::ops::Deref;
 use std::os::raw::c_char;
 
@@ -22,6 +24,10 @@ pub const VALIDATION_LAYERS: [&str; 1] = [
 #[cfg(not(debug_assertions))]
 pub const VALIDATION_LAYERS: [&str; 0] = [];
 
+pub const DEVICE_EXTENSIONS: [&CStr; 1] = [
+    khr::Swapchain::name(),
+];
+
 impl Deref for Instance {
     type Target = ash::Instance;
 
@@ -41,8 +47,8 @@ impl Instance {
         let application_version: u32 = vk::make_api_version(0, 0, 1, 0);
         let engine_name: CString = CString::new("Fast Rehnda").unwrap();
         let engine_version: u32 = vk::make_api_version(0, 0, 1, 0);
-        // vulkan spec 1.0.0
-        let vulkan_api_version: u32 = vk::make_api_version(0, 1, 0, 0);
+        // vulkan spec 1.3.0
+        let vulkan_api_version: u32 = vk::make_api_version(0, 1, 3, 0);
 
         let app_info = vk::ApplicationInfo::builder()
             .application_name(&application_name)
@@ -137,17 +143,44 @@ impl Instance {
 
         let mut score = 0usize;
 
+        // preference discrete GPUs
         if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
             score += 1000;
         }
         score += properties.limits.max_image_dimension2_d as usize;
 
+        // are our required device queue type supported?
         let queue_family_indices = self.find_queue_families(surface, physical_device);
         if !queue_family_indices.is_complete() {
             return None
         }
 
+        // are our required device extensions supported?
+        if !self.does_device_support_required_extensions(physical_device) {
+            return None
+        }
+
+        // is there adequate swapchain support?
+        let swapchain_support = surface.query_swapchain_support_details(physical_device);
+        if swapchain_support.formats.is_empty() || swapchain_support.present_modes.is_empty() {
+            return None
+        }
+
         Some(score)
+    }
+
+    fn does_device_support_required_extensions(&self, physical_device: vk::PhysicalDevice) -> bool {
+        let mut extension_names = DEVICE_EXTENSIONS.iter()
+            .map(|extension_name| extension_name.to_str().unwrap())
+            .collect::<HashSet<_>>();
+        let device_extension_properties = unsafe { self.instance.enumerate_device_extension_properties(physical_device) }
+            .unwrap();
+        for extension in device_extension_properties {
+            let available_extension_name = vk_cstr_to_string(extension.extension_name.as_slice());
+            extension_names.remove(available_extension_name.as_str());
+        }
+
+        extension_names.is_empty()
     }
 }
 

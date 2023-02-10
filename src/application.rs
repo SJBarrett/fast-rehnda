@@ -13,6 +13,7 @@ pub struct Application {
     instance: etna::Instance,
     device: etna::Device,
     surface: etna::Surface,
+    swapchain: etna::Swapchain,
 }
 
 // https://github.com/unknownue/vulkan-tutorial-rust/blob/master/src/tutorials/00_base_code.rs
@@ -26,7 +27,9 @@ impl Application {
         let entry = ash::Entry::linked();
         let instance = etna::Instance::new(&entry);
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
-        let device = etna::Device::create(&instance, &surface, instance.pick_physical_device(&surface));
+        let physical_device = instance.pick_physical_device(&surface);
+        let device = etna::Device::create(&instance, &surface, physical_device);
+        let swapchain = etna::Swapchain::create(&instance, &device, &surface, &instance.find_queue_families(&surface, physical_device), &surface.query_best_swapchain_creation_details(&window, physical_device));
 
         Application {
             window,
@@ -34,6 +37,7 @@ impl Application {
             instance,
             device,
             surface,
+            swapchain,
         }
     }
 
