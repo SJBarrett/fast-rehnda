@@ -102,6 +102,10 @@ impl Pipeline {
             .attachments(color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
+        let color_attachment_formats = &[swapchain.image_format];
+        let mut pipeline_rendering_create_info = vk::PipelineRenderingCreateInfo::builder()
+            .color_attachment_formats(color_attachment_formats);
+
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&[])
             .push_constant_ranges(&[]);
@@ -119,7 +123,8 @@ impl Pipeline {
             .color_blend_state(&color_blend_state_ci)
             .dynamic_state(&dynamic_state_ci)
             .layout(pipeline_layout)
-            .render_pass(swapchain.render_pass())
+            .render_pass(vk::RenderPass::null())
+            .push_next(&mut pipeline_rendering_create_info)
             .subpass(0);
         let pipeline_create_infos = &[pipeline_ci.build()];
         let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), pipeline_create_infos, None) }

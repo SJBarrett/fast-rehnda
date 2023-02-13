@@ -42,11 +42,15 @@ impl Device {
         let mut dynamic_rendering_feature = vk::PhysicalDeviceDynamicRenderingFeatures::builder()
             .dynamic_rendering(true)
             .build();
+        let mut synchronization_2_feature = vk::PhysicalDeviceSynchronization2Features::builder()
+            .synchronization2(true)
+            .build();
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(queue_create_infos.as_slice())
             .enabled_layer_names(validation_layer_names.as_slice())
             .enabled_extension_names(device_extension_names.as_slice())
-            .push_next(&mut dynamic_rendering_feature);
+            .push_next(&mut dynamic_rendering_feature)
+            .push_next(&mut synchronization_2_feature);
 
 
         let device = unsafe { (*instance).create_device(physical_device, &device_create_info, None) }

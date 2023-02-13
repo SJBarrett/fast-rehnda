@@ -6,9 +6,10 @@ use ash::vk;
 use crate::etna;
 use crate::etna::utility::vk_cstr_to_string;
 
-pub const DEVICE_EXTENSIONS: [&CStr; 2] = [
+pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
     khr::Swapchain::name(),
     khr::DynamicRendering::name(),
+    khr::Synchronization2::name(),
 ];
 
 pub struct PhysicalDevice {

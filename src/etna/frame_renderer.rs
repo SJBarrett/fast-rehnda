@@ -5,7 +5,6 @@ use crate::etna::QueueFamilyIndices;
 
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
-    swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
     // sync objects
@@ -59,23 +58,39 @@ impl FrameRenderer {
         unsafe { self.device.begin_command_buffer(self.command_buffer, &begin_info) }
             .expect("Failed to being recording command buffer");
 
+        // with dynamic rendering we need to make the output image ready for writing to
+        self.transition_image_layout(swapchain.images[image_index as usize], &TransitionProps {
+            old_layout: vk::ImageLayout::UNDEFINED,
+            src_access_mask: vk::AccessFlags2::empty(),
+            src_stage_mask: vk::PipelineStageFlags2::TOP_OF_PIPE,
+            new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+        });
+
         let clear_color = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 1.0]
             }
         };
-        let clear_values = &[clear_color];
-        let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(swapchain.render_pass())
-            .framebuffer(self.swapchain_framebuffers[image_index as usize])
+
+        let color_attachment_info = vk::RenderingAttachmentInfo::builder()
+            .image_view(swapchain.image_views()[image_index as usize])
+            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .clear_value(clear_color);
+
+        let color_attachments = &[color_attachment_info.build()];
+        let rendering_info = vk::RenderingInfo::builder()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent: swapchain.extent(),
             })
-            .clear_values(clear_values)
-            ;
+            .layer_count(1)
+            .color_attachments(color_attachments);
 
-        unsafe { self.device.cmd_begin_render_pass(self.command_buffer, &render_pass_info, vk::SubpassContents::INLINE); }
+        unsafe { self.device.cmd_begin_rendering(self.command_buffer, &rendering_info); }
         unsafe { self.device.cmd_bind_pipeline(self.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
 
         let viewport = [vk::Viewport::builder()
@@ -95,28 +110,61 @@ impl FrameRenderer {
         unsafe { self.device.cmd_set_scissor(self.command_buffer, 0, &scissor); }
 
         unsafe { self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0) };
-        unsafe { self.device.cmd_end_render_pass(self.command_buffer) };
+        unsafe { self.device.cmd_end_rendering(self.command_buffer) };
+
+        // For dynamic rendering we must manually transition the image layout for presentation
+        // after drawing. This means changing it from a "color attachment write" to a "present".
+        // This happens at the very last stage of render (i.e. BOTTOM_OF_PIPE)
+        self.transition_image_layout(swapchain.images[image_index as usize], &TransitionProps {
+            old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            dst_stage_mask: vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
+            dst_access_mask: vk::AccessFlags2::empty(),
+        });
+
         unsafe { self.device.end_command_buffer(self.command_buffer) }
             .expect("Failed to record command buffer");
     }
+
+    fn transition_image_layout(&self, image: vk::Image, transition: &TransitionProps) {
+        let image_memory_barrier = vk::ImageMemoryBarrier2::builder()
+            .src_access_mask(transition.src_access_mask)
+            .src_stage_mask(transition.src_stage_mask)
+            .old_layout(transition.old_layout)
+            .new_layout(transition.new_layout)
+            .dst_stage_mask(transition.dst_stage_mask)
+            .dst_access_mask(transition.dst_access_mask)
+            .image(image)
+            .subresource_range(vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build()
+            );
+        let image_mem_barriers = &[image_memory_barrier.build()];
+        let dep_info = vk::DependencyInfo::builder()
+            .image_memory_barriers(image_mem_barriers);
+        // make the transition to present happen
+        unsafe { self.device.cmd_pipeline_barrier2(self.command_buffer, &dep_info) };
+    }
+}
+
+struct TransitionProps {
+    old_layout: vk::ImageLayout,
+    src_access_mask: vk::AccessFlags2,
+    src_stage_mask: vk::PipelineStageFlags2,
+    new_layout: vk::ImageLayout,
+    dst_access_mask: vk::AccessFlags2,
+    dst_stage_mask: vk::PipelineStageFlags2,
 }
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, swapchain: &etna::Swapchain, queue_family_indices: &QueueFamilyIndices) -> FrameRenderer {
-        let swapchain_framebuffers: Vec<vk::Framebuffer> = swapchain.image_views().iter().map(|image_view| {
-            let attachments = [*image_view];
-
-            let framebuffer_ci = vk::FramebufferCreateInfo::builder()
-                .render_pass(swapchain.render_pass())
-                .attachments(&attachments)
-                .width(swapchain.extent().width)
-                .height(swapchain.extent().height)
-                .layers(1);
-            unsafe { device.create_framebuffer(&framebuffer_ci, None) }
-                .expect("Failed to create framebuffer")
-        }).collect();
-
+    pub fn create(device: Arc<etna::Device>, queue_family_indices: &QueueFamilyIndices) -> FrameRenderer {
         let command_pool_ci = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_family_indices.graphics_family);
@@ -143,7 +191,6 @@ impl FrameRenderer {
 
         FrameRenderer {
             device,
-            swapchain_framebuffers,
             command_pool,
             command_buffer,
             image_available_semaphore,
@@ -160,9 +207,6 @@ impl Drop for FrameRenderer {
             self.device.destroy_semaphore(self.render_finished_semaphore, None);
             self.device.destroy_fence(self.in_flight_fence, None);
             self.device.destroy_command_pool(self.command_pool, None);
-            for framebuffer in &self.swapchain_framebuffers {
-                self.device.destroy_framebuffer(*framebuffer, None);
-            }
         }
     }
 }

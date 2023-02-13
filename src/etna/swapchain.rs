@@ -8,11 +8,10 @@ pub struct Swapchain {
     device: Arc<etna::Device>,
     swapchain: vk::SwapchainKHR,
     swapchain_fn: khr::Swapchain,
-    image_format: vk::Format,
-    extent: vk::Extent2D,
-    images: Vec<vk::Image>,
-    image_views: Vec<vk::ImageView>,
-    render_pass: vk::RenderPass,
+    pub image_format: vk::Format,
+    pub extent: vk::Extent2D,
+    pub images: Vec<vk::Image>,
+    pub image_views: Vec<vk::ImageView>,
 }
 
 impl Swapchain {
@@ -38,10 +37,6 @@ impl Swapchain {
 
     pub fn image_views(&self) -> &Vec<vk::ImageView> {
         &self.image_views
-    }
-
-    pub fn render_pass(&self) -> vk::RenderPass {
-        self.render_pass
     }
 }
 
@@ -107,8 +102,6 @@ impl Swapchain {
                 .expect("Failed to create image view")
         }).collect();
 
-        let render_pass = Self::create_render_pass(&device, swapchain_creation_info.image_format);
-
         Swapchain {
             device,
             swapchain,
@@ -117,49 +110,7 @@ impl Swapchain {
             extent: chosen_swapchain_props.extent,
             images: swapchain_images,
             image_views,
-            render_pass,
         }
-    }
-
-    fn create_render_pass(device: &etna::Device, format: vk::Format) -> vk::RenderPass {
-        // render pass creation
-        let color_attachment = vk::AttachmentDescription::builder()
-            .format(format)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
-
-        let color_attachment_ref = vk::AttachmentReference::builder()
-            .attachment(0)
-            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
-
-        let color_attachment_refs = &[color_attachment_ref.build()];
-        let subpass = vk::SubpassDescription::builder()
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(color_attachment_refs);
-
-        let dependency = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
-
-        let attachments = &[color_attachment.build()];
-        let subpasses = &[subpass.build()];
-        let dependencies = &[dependency.build()];
-        let render_pass_ci = vk::RenderPassCreateInfo::builder()
-            .attachments(attachments)
-            .subpasses(subpasses)
-            .dependencies(dependencies);
-
-        unsafe { device.create_render_pass(&render_pass_ci, None) }
-            .expect("Failed to create render pass")
     }
 }
 
@@ -167,7 +118,6 @@ impl Swapchain {
 impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_render_pass(self.render_pass, None);
             for image_view in &self.image_views {
                 self.device.destroy_image_view(*image_view, None);
             }

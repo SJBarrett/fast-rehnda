@@ -25,7 +25,7 @@ impl EtnaEngine {
         let device = Arc::new(etna::Device::create(&instance, &surface, physical_device.vk()));
         let swapchain = etna::Swapchain::create(&instance, device.clone(), &surface, &physical_device.queue_families(), &surface.query_best_swapchain_creation_details(&window, physical_device.vk()));
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &swapchain, &physical_device.queue_families());
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device.queue_families());
 
 
         EtnaEngine {
