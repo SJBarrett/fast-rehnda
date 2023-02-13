@@ -27,7 +27,7 @@ impl Surface {
         })
     }
 
-    pub fn get_physical_device_surface_support(&self, physical_device: PhysicalDevice, queue_family_index: u32) -> VkResult<bool> {
+    pub fn physical_device_surface_support(&self, physical_device: PhysicalDevice, queue_family_index: u32) -> VkResult<bool> {
         unsafe { self.surface_fn.get_physical_device_surface_support(physical_device, queue_family_index, self.surface) }
     }
 

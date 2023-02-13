@@ -8,7 +8,7 @@ use glob::glob;
 
 fn main() {
     println!("cargo:rerun-if-changed=shaders/src");
-    let files_to_compile = get_files_to_compile();
+    let files_to_compile = files_to_compile();
     let compiler = Compiler::new().expect("Failed to build compiler");
     files_to_compile.iter().for_each(|to_compile| compile_to_spirv(&compiler, to_compile));
 }
@@ -30,7 +30,7 @@ fn compile_to_spirv(compiler: &Compiler, to_compile: &ToCompile) {
     out_file.write_all(binary_result.as_binary_u8()).unwrap();
 }
 
-fn get_files_to_compile() -> Vec<ToCompile> {
+fn files_to_compile() -> Vec<ToCompile> {
     let mut to_compiles: Vec<ToCompile> = Vec::new();
     for entry in glob("shaders/src/**/*").unwrap() {
         let a = entry.unwrap();

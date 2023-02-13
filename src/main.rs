@@ -8,6 +8,7 @@ use crate::application::Application;
 
 mod etna;
 mod application;
+mod etna_engine;
 
 
 fn main() {

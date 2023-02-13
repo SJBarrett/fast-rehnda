@@ -9,8 +9,8 @@ use crate::etna::{DEVICE_EXTENSIONS, VALIDATION_LAYERS};
 
 pub struct Device {
     device: ash::Device,
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
+    pub graphics_queue: vk::Queue,
+    pub present_queue: vk::Queue,
 }
 
 impl Deref for Device {
@@ -38,10 +38,15 @@ impl Device {
             .collect();
         let validation_layer_names = VALIDATION_LAYERS.map(|layer| layer.as_ptr() as *const c_char);
         let device_extension_names = DEVICE_EXTENSIONS.map(|extension| extension.as_ptr() as *const c_char);
+        // enable dynamic rendering
+        let mut dynamic_rendering_feature = vk::PhysicalDeviceDynamicRenderingFeatures::builder()
+            .dynamic_rendering(true)
+            .build();
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(queue_create_infos.as_slice())
             .enabled_layer_names(validation_layer_names.as_slice())
-            .enabled_extension_names(device_extension_names.as_slice());
+            .enabled_extension_names(device_extension_names.as_slice())
+            .push_next(&mut dynamic_rendering_feature);
 
 
         let device = unsafe { (*instance).create_device(physical_device, &device_create_info, None) }
