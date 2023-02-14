@@ -30,10 +30,10 @@ impl FrameRenderer {
     fn submit_draw(&self, swapchain: &etna::Swapchain, image_index: u32) {
         // we need swapchain image to be available before we reach the color output stage (fragment shader)
         // so vertex shading could start before this point
-        let wait_semaphores = &[self.image_available_semaphores[self.current_frame]];
+        let wait_semaphores = &[self.current_image_available_semaphore()];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let signal_semaphores = &[self.render_finished_semaphores[self.current_frame]];
-        let command_buffers = &[self.command_buffers[self.current_frame]];
+        let signal_semaphores = &[self.current_render_finished_semaphore()];
+        let command_buffers = &[self.current_command_buffer()];
 
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
@@ -42,24 +42,24 @@ impl FrameRenderer {
             .command_buffers(command_buffers);
         let submits = &[submit_info.build()];
 
-        unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.in_flight_fences[self.current_frame]) }
+        unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.current_in_flight_fence()) }
             .expect("Failed to submit to graphics queue");
         swapchain.present(image_index, signal_semaphores);
     }
 
     fn prepare_to_draw(&self, swapchain: &etna::Swapchain) -> u32 {
-        unsafe { self.device.wait_for_fences(&[self.in_flight_fences[self.current_frame]], true, u64::MAX) }
+        unsafe { self.device.wait_for_fences(&[self.current_in_flight_fence()], true, u64::MAX) }
             .expect("Failed to wait for in flight fence");
-        unsafe { self.device.reset_fences(&[self.in_flight_fences[self.current_frame]]) }
+        unsafe { self.device.reset_fences(&[self.current_in_flight_fence()]) }
             .expect("Failed to reset fences");
-        unsafe { self.device.reset_command_buffer(self.command_buffers[self.current_frame], vk::CommandBufferResetFlags::empty()) }
+        unsafe { self.device.reset_command_buffer(self.current_command_buffer(), vk::CommandBufferResetFlags::empty()) }
             .expect("Failed to reset command buffer");
 
-        swapchain.acquire_next_image_and_get_index(self.image_available_semaphores[self.current_frame])
+        swapchain.acquire_next_image_and_get_index(self.current_image_available_semaphore())
     }
 
     fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32) {
-        let command_buffer = self.command_buffers[self.current_frame];
+        let command_buffer = self.current_command_buffer();
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
             .expect("Failed to being recording command buffer");
@@ -155,7 +155,23 @@ impl FrameRenderer {
         let dep_info = vk::DependencyInfo::builder()
             .image_memory_barriers(image_mem_barriers);
         // make the transition to present happen
-        unsafe { self.device.cmd_pipeline_barrier2(self.command_buffers[self.current_frame], &dep_info) };
+        unsafe { self.device.cmd_pipeline_barrier2(self.current_command_buffer(), &dep_info) };
+    }
+    
+    fn current_command_buffer(&self) -> vk::CommandBuffer {
+        self.command_buffers[self.current_frame]
+    }
+
+    fn current_image_available_semaphore(&self) -> vk::Semaphore {
+        self.image_available_semaphores[self.current_frame]
+    }
+
+    fn current_render_finished_semaphore(&self) -> vk::Semaphore {
+        self.render_finished_semaphores[self.current_frame]
+    }
+    
+    fn current_in_flight_fence(&self) -> vk::Fence {
+        self.in_flight_fences[self.current_frame]
     }
 }
 
