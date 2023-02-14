@@ -57,10 +57,19 @@ impl Swapchain {
 
 // intialisation functionality
 impl Swapchain {
-    pub fn recreate(&mut self) {
+    pub fn recreate(&mut self, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) {
+        debug!("Recreating swapchain");
         unsafe { self.device.device_wait_idle() }
             .expect("Failed to wait for device idle when recreating swapchain");
         self.destroy_resources();
+        let image_format = chosen_swapchain_props.surface_format.format;
+        let extent = chosen_swapchain_props.extent;
+        let (swapchain, images, image_views) = Self::create_swapchain_resources(&self.device, &self.swapchain_fn, surface, queue_family_indices, chosen_swapchain_props);
+        self.image_format = image_format;
+        self.extent = extent;
+        self.swapchain = swapchain;
+        self.images = images;
+        self.image_views = image_views;
     }
     pub fn create(instance: &ash::Instance, device: Arc<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
         let swapchain_fn = khr::Swapchain::new(instance, &device);

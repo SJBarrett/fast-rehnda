@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use ash::vk;
-use log::info;
+use log::{debug, info};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use crate::etna;
 use crate::etna::SwapchainError;
@@ -52,11 +52,22 @@ impl EtnaEngine {
 
 
     pub fn render(&mut self) {
+        if self.is_minimized() {
+            return;
+        }
+
         let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline);
         match draw_result {
             Ok(_) => {},
             Err(SwapchainError::RequiresRecreation) => {
-                self.swapchain.recreate();
+                if self.is_minimized() {
+                    return;
+                }
+                self.swapchain.recreate(
+                    &self.surface,
+                    &self.physical_device.queue_families(),
+                    self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
+                );
             }
         }
     }
@@ -65,5 +76,9 @@ impl EtnaEngine {
         info!("Waiting for device idle");
         unsafe { self.device.device_wait_idle() }
             .expect("Failed to wait for the device to be idle");
+    }
+
+    fn is_minimized(&self) -> bool {
+        self.window.inner_size().height == 0 || self.window.inner_size().width == 0
     }
 }
