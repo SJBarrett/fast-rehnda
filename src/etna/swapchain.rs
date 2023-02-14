@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
+use log::debug;
 use crate::etna;
 use crate::etna::{ChosenSwapchainProps, QueueFamilyIndices};
 
@@ -14,21 +15,35 @@ pub struct Swapchain {
     pub image_views: Vec<vk::ImageView>,
 }
 
+pub type SwapchainResult<T> = Result<T, SwapchainError>;
+
+pub enum SwapchainError {
+    RequiresRecreation,
+}
+
 impl Swapchain {
-    pub fn acquire_next_image_and_get_index(&self, semaphore: vk::Semaphore) -> u32 {
-        unsafe { self.swapchain_fn.acquire_next_image(self.swapchain, u64::MAX, semaphore, vk::Fence::null()) }
-            .expect("Failed to acquire next swapchain image").0
+    pub fn acquire_next_image_and_get_index(&self, semaphore: vk::Semaphore) -> SwapchainResult<u32> {
+        let acquire_result = unsafe { self.swapchain_fn.acquire_next_image(self.swapchain, u64::MAX, semaphore, vk::Fence::null()) };
+        match acquire_result {
+            Ok((image_index, _)) => Ok(image_index),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(SwapchainError::RequiresRecreation),
+            Err(unexpected_error) => panic!("Unexpected error acquiring next image: {}", unexpected_error),
+        }
     }
 
-    pub fn present(&self, image_index: u32, signal_semaphores: &[vk::Semaphore]) {
+    pub fn present(&self, image_index: u32, signal_semaphores: &[vk::Semaphore]) -> SwapchainResult<()> {
         let swapchains = &[self.swapchain];
         let image_indices = &[image_index];
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(signal_semaphores)
             .swapchains(swapchains)
             .image_indices(image_indices);
-        unsafe { self.swapchain_fn.queue_present(self.device.present_queue, &present_info) }
-            .expect("Failed to present to swapchain");
+        let present_result = unsafe { self.swapchain_fn.queue_present(self.device.present_queue, &present_info) };
+        match present_result {
+            Ok(_) => Ok(()),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => Err(SwapchainError::RequiresRecreation),
+            Err(unexpected_error) => panic!("Unexpected error presenting swapchain: {}", unexpected_error),
+        }
     }
 
     pub fn extent(&self) -> vk::Extent2D {
@@ -42,7 +57,30 @@ impl Swapchain {
 
 // intialisation functionality
 impl Swapchain {
-    pub fn create(instance: &ash::Instance, device: Arc<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: &ChosenSwapchainProps) -> Swapchain {
+    pub fn recreate(&mut self) {
+        unsafe { self.device.device_wait_idle() }
+            .expect("Failed to wait for device idle when recreating swapchain");
+        self.destroy_resources();
+    }
+    pub fn create(instance: &ash::Instance, device: Arc<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
+        let swapchain_fn = khr::Swapchain::new(instance, &device);
+
+        let image_format = chosen_swapchain_props.surface_format.format;
+        let extent = chosen_swapchain_props.extent;
+        let (swapchain, images, image_views) = Self::create_swapchain_resources(&device, &swapchain_fn, surface, queue_family_indices, chosen_swapchain_props);
+
+        Swapchain {
+            device,
+            swapchain_fn,
+            swapchain,
+            images,
+            image_views,
+            image_format,
+            extent,
+        }
+    }
+
+    fn create_swapchain_resources(device: &etna::Device, swapchain_fn: &khr::Swapchain, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> (vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>){
         // request one more than the min to avoid waiting on the driver
         let mut image_count = chosen_swapchain_props.capabilities.min_image_count + 1;
         if chosen_swapchain_props.capabilities.max_image_count > 0 && image_count > chosen_swapchain_props.capabilities.max_image_count {
@@ -73,7 +111,6 @@ impl Swapchain {
             swapchain_creation_info
                 .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
         };
-        let swapchain_fn = khr::Swapchain::new(instance, &device);
         let swapchain = unsafe { swapchain_fn.create_swapchain(&swapchain_creation_info, None) }
             .expect("Failed to create the swapchain");
 
@@ -102,14 +139,19 @@ impl Swapchain {
                 .expect("Failed to create image view")
         }).collect();
 
-        Swapchain {
-            device,
-            swapchain,
-            swapchain_fn,
-            image_format: chosen_swapchain_props.surface_format.format,
-            extent: chosen_swapchain_props.extent,
-            images: swapchain_images,
-            image_views,
+        (swapchain, swapchain_images, image_views)
+    }
+
+    fn destroy_resources(&mut self) {
+        debug!("Destroying swapchain");
+        unsafe {
+            for image_view in &self.image_views {
+                self.device.destroy_image_view(*image_view, None);
+            }
+            self.swapchain_fn.destroy_swapchain(self.swapchain, None);
+            self.image_views.clear();
+            self.images.clear();
+            self.swapchain = vk::SwapchainKHR::null();
         }
     }
 }
@@ -117,11 +159,6 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
-        unsafe {
-            for image_view in &self.image_views {
-                self.device.destroy_image_view(*image_view, None);
-            }
-            self.swapchain_fn.destroy_swapchain(self.swapchain, None);
-        }
+        self.destroy_resources();
     }
 }

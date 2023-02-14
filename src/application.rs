@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
 
@@ -8,19 +9,19 @@ const WINDOW_WIDTH: u32 = 800;
 const WINDOW_HEIGHT: u32 = 600;
 
 pub struct Application {
-    _window: winit::window::Window,
+    _window: Arc<winit::window::Window>,
     etna_engine: EtnaEngine,
 }
 
 // https://github.com/unknownue/vulkan-tutorial-rust/blob/master/src/tutorials/00_base_code.rs
 impl Application {
     pub fn new(event_loop: &EventLoop<()>) -> Application {
-        let window = winit::window::WindowBuilder::new()
+        let window = Arc::new(winit::window::WindowBuilder::new()
             .with_title(WINDOW_TITLE)
             .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
             .build(event_loop)
-            .expect("Failed to create window.");
-        let engine = EtnaEngine::new(&window);
+            .expect("Failed to create window."));
+        let engine = EtnaEngine::new(window.clone());
 
         Application {
             _window: window,

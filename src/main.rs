@@ -12,7 +12,7 @@ mod etna_engine;
 
 
 fn main() {
-    TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
+    TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto).unwrap();
 
     let event_loop = EventLoop::new();
     let application = Application::new(&event_loop);

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use ash::vk;
 use crate::etna;
-use crate::etna::QueueFamilyIndices;
+use crate::etna::{QueueFamilyIndices, SwapchainResult};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -18,16 +18,16 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline) {
-        let image_index = self.prepare_to_draw(swapchain);
+    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline) -> SwapchainResult<()> {
+        let image_index = self.prepare_to_draw(swapchain)?;
 
         self.record_draw_commands(swapchain, pipeline, image_index);
 
-        self.submit_draw(swapchain, image_index);
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        self.submit_draw(swapchain, image_index)?;
+        Ok(())
     }
 
-    fn submit_draw(&self, swapchain: &etna::Swapchain, image_index: u32) {
+    fn submit_draw(&mut self, swapchain: &etna::Swapchain, image_index: u32) -> SwapchainResult<()> {
         // we need swapchain image to be available before we reach the color output stage (fragment shader)
         // so vertex shading could start before this point
         let wait_semaphores = &[self.current_image_available_semaphore()];
@@ -44,18 +44,21 @@ impl FrameRenderer {
 
         unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.current_in_flight_fence()) }
             .expect("Failed to submit to graphics queue");
-        swapchain.present(image_index, signal_semaphores);
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        swapchain.present(image_index, signal_semaphores)
     }
 
-    fn prepare_to_draw(&self, swapchain: &etna::Swapchain) -> u32 {
+    fn prepare_to_draw(&self, swapchain: &etna::Swapchain) -> SwapchainResult<u32> {
         unsafe { self.device.wait_for_fences(&[self.current_in_flight_fence()], true, u64::MAX) }
             .expect("Failed to wait for in flight fence");
-        unsafe { self.device.reset_fences(&[self.current_in_flight_fence()]) }
-            .expect("Failed to reset fences");
+
         unsafe { self.device.reset_command_buffer(self.current_command_buffer(), vk::CommandBufferResetFlags::empty()) }
             .expect("Failed to reset command buffer");
 
-        swapchain.acquire_next_image_and_get_index(self.current_image_available_semaphore())
+        let image_index = swapchain.acquire_next_image_and_get_index(self.current_image_available_semaphore())?;
+        unsafe { self.device.reset_fences(&[self.current_in_flight_fence()]) }
+            .expect("Failed to reset fences");
+        Ok(image_index)
     }
 
     fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32) {

@@ -46,13 +46,13 @@ impl Surface {
         }
     }
 
-    pub fn query_best_swapchain_creation_details(&self, window: &winit::window::Window, physical_device: PhysicalDevice) -> ChosenSwapchainProps {
+    pub fn query_best_swapchain_creation_details(&self, window_size: winit::dpi::PhysicalSize<u32>, physical_device: PhysicalDevice) -> ChosenSwapchainProps {
         let support_details = self.query_swapchain_support_details(physical_device);
         ChosenSwapchainProps {
             capabilities: support_details.capabilities,
             surface_format: Self::choose_surface_format(&support_details.formats),
             present_mode: Self::choose_present_mode(&support_details.present_modes),
-            extent: Self::choose_swapchain_extent(window, &support_details.capabilities),
+            extent: Self::choose_swapchain_extent(window_size, &support_details.capabilities),
         }
     }
 
@@ -69,11 +69,10 @@ impl Surface {
             .map_or(vk::PresentModeKHR::FIFO, |chosen_present_mode| *chosen_present_mode)
     }
 
-    fn choose_swapchain_extent(window: &winit::window::Window, surface_capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
+    fn choose_swapchain_extent(window_size: winit::dpi::PhysicalSize<u32>, surface_capabilities: &vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
         if surface_capabilities.current_extent.width != u32::MAX {
             return surface_capabilities.current_extent;
         }
-        let window_size = window.inner_size();
 
         let chosen_width = window_size.width.clamp(surface_capabilities.min_image_extent.width, surface_capabilities.max_image_extent.width);
         let chosen_height = window_size.height.clamp(surface_capabilities.min_image_extent.height, surface_capabilities.max_image_extent.height);
