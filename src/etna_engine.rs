@@ -42,7 +42,7 @@ impl EtnaEngine {
 
 
 
-    pub fn render(&self) {
+    pub fn render(&mut self) {
         self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline);
     }
 

@@ -3,32 +3,37 @@ use ash::vk;
 use crate::etna;
 use crate::etna::QueueFamilyIndices;
 
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
+
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
     command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
+    command_buffers: Vec<vk::CommandBuffer>,
     // sync objects
-    image_available_semaphore: vk::Semaphore,
-    render_finished_semaphore: vk::Semaphore,
-    in_flight_fence: vk::Fence,
+    image_available_semaphores: Vec<vk::Semaphore>,
+    render_finished_semaphores: Vec<vk::Semaphore>,
+    in_flight_fences: Vec<vk::Fence>,
+
+    current_frame: usize,
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline) {
+    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline) {
         let image_index = self.prepare_to_draw(swapchain);
 
         self.record_draw_commands(swapchain, pipeline, image_index);
 
         self.submit_draw(swapchain, image_index);
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
     fn submit_draw(&self, swapchain: &etna::Swapchain, image_index: u32) {
         // we need swapchain image to be available before we reach the color output stage (fragment shader)
         // so vertex shading could start before this point
-        let wait_semaphores = &[self.image_available_semaphore];
+        let wait_semaphores = &[self.image_available_semaphores[self.current_frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let signal_semaphores = &[self.render_finished_semaphore];
-        let command_buffers = &[self.command_buffer];
+        let signal_semaphores = &[self.render_finished_semaphores[self.current_frame]];
+        let command_buffers = &[self.command_buffers[self.current_frame]];
 
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
@@ -37,25 +42,26 @@ impl FrameRenderer {
             .command_buffers(command_buffers);
         let submits = &[submit_info.build()];
 
-        unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.in_flight_fence) }
+        unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.in_flight_fences[self.current_frame]) }
             .expect("Failed to submit to graphics queue");
         swapchain.present(image_index, signal_semaphores);
     }
 
     fn prepare_to_draw(&self, swapchain: &etna::Swapchain) -> u32 {
-        unsafe { self.device.wait_for_fences(&[self.in_flight_fence], true, u64::MAX) }
+        unsafe { self.device.wait_for_fences(&[self.in_flight_fences[self.current_frame]], true, u64::MAX) }
             .expect("Failed to wait for in flight fence");
-        unsafe { self.device.reset_fences(&[self.in_flight_fence]) }
+        unsafe { self.device.reset_fences(&[self.in_flight_fences[self.current_frame]]) }
             .expect("Failed to reset fences");
-        unsafe { self.device.reset_command_buffer(self.command_buffer, vk::CommandBufferResetFlags::empty()) }
+        unsafe { self.device.reset_command_buffer(self.command_buffers[self.current_frame], vk::CommandBufferResetFlags::empty()) }
             .expect("Failed to reset command buffer");
 
-        swapchain.acquire_next_image_and_get_index(self.image_available_semaphore)
+        swapchain.acquire_next_image_and_get_index(self.image_available_semaphores[self.current_frame])
     }
 
     fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32) {
+        let command_buffer = self.command_buffers[self.current_frame];
         let begin_info = vk::CommandBufferBeginInfo::builder();
-        unsafe { self.device.begin_command_buffer(self.command_buffer, &begin_info) }
+        unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
             .expect("Failed to being recording command buffer");
 
         // with dynamic rendering we need to make the output image ready for writing to
@@ -90,8 +96,8 @@ impl FrameRenderer {
             .layer_count(1)
             .color_attachments(color_attachments);
 
-        unsafe { self.device.cmd_begin_rendering(self.command_buffer, &rendering_info); }
-        unsafe { self.device.cmd_bind_pipeline(self.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
+        unsafe { self.device.cmd_begin_rendering(command_buffer, &rendering_info); }
+        unsafe { self.device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
 
         let viewport = [vk::Viewport::builder()
             .x(0.0)
@@ -101,16 +107,16 @@ impl FrameRenderer {
             .min_depth(0.0)
             .max_depth(1.0)
             .build()];
-        unsafe { self.device.cmd_set_viewport(self.command_buffer, 0, &viewport); }
+        unsafe { self.device.cmd_set_viewport(command_buffer, 0, &viewport); }
 
         let scissor = [vk::Rect2D::builder()
-            .offset(vk::Offset2D {x: 0, y: 0})
+            .offset(vk::Offset2D { x: 0, y: 0 })
             .extent(swapchain.extent())
             .build()];
-        unsafe { self.device.cmd_set_scissor(self.command_buffer, 0, &scissor); }
+        unsafe { self.device.cmd_set_scissor(command_buffer, 0, &scissor); }
 
-        unsafe { self.device.cmd_draw(self.command_buffer, 3, 1, 0, 0) };
-        unsafe { self.device.cmd_end_rendering(self.command_buffer) };
+        unsafe { self.device.cmd_draw(command_buffer, 3, 1, 0, 0) };
+        unsafe { self.device.cmd_end_rendering(command_buffer) };
 
         // For dynamic rendering we must manually transition the image layout for presentation
         // after drawing. This means changing it from a "color attachment write" to a "present".
@@ -124,7 +130,7 @@ impl FrameRenderer {
             dst_access_mask: vk::AccessFlags2::empty(),
         });
 
-        unsafe { self.device.end_command_buffer(self.command_buffer) }
+        unsafe { self.device.end_command_buffer(command_buffer) }
             .expect("Failed to record command buffer");
     }
 
@@ -149,7 +155,7 @@ impl FrameRenderer {
         let dep_info = vk::DependencyInfo::builder()
             .image_memory_barriers(image_mem_barriers);
         // make the transition to present happen
-        unsafe { self.device.cmd_pipeline_barrier2(self.command_buffer, &dep_info) };
+        unsafe { self.device.cmd_pipeline_barrier2(self.command_buffers[self.current_frame], &dep_info) };
     }
 }
 
@@ -173,29 +179,36 @@ impl FrameRenderer {
 
         let command_buffer_alloc_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(command_pool)
-            .command_buffer_count(1)
+            .command_buffer_count(MAX_FRAMES_IN_FLIGHT as u32)
             .level(vk::CommandBufferLevel::PRIMARY);
-        let command_buffer = unsafe { device.allocate_command_buffers(&command_buffer_alloc_info) }
-            .expect("Failed to allocation command buffer")[0];
+        let command_buffers = unsafe { device.allocate_command_buffers(&command_buffer_alloc_info) }
+            .expect("Failed to allocation command buffer");
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
         let signaled_fence_ci = vk::FenceCreateInfo::builder()
             .flags(vk::FenceCreateFlags::SIGNALED);
 
-        let image_available_semaphore = unsafe { device.create_semaphore(&semaphore_ci, None) }
-            .expect("Failed to create semaphore");
-        let render_finished_semaphore = unsafe { device.create_semaphore(&semaphore_ci, None) }
-            .expect("Failed to create semaphore");
-        let in_flight_fence = unsafe { device.create_fence(&signaled_fence_ci, None) }
-            .expect("Failed to create fence");
+        let mut image_available_semaphores: Vec<vk::Semaphore> = Vec::new();
+        let mut render_finished_semaphores: Vec<vk::Semaphore> = Vec::new();
+        let mut in_flight_fences: Vec<vk::Fence> = Vec::new();
+
+        for _i in 0..MAX_FRAMES_IN_FLIGHT {
+            image_available_semaphores.push(unsafe { device.create_semaphore(&semaphore_ci, None) }
+                .expect("Failed to create semaphore"));
+            render_finished_semaphores.push(unsafe { device.create_semaphore(&semaphore_ci, None) }
+                .expect("Failed to create semaphore"));
+            in_flight_fences.push(unsafe { device.create_fence(&signaled_fence_ci, None) }
+                .expect("Failed to create fence"));
+        }
 
         FrameRenderer {
             device,
             command_pool,
-            command_buffer,
-            image_available_semaphore,
-            render_finished_semaphore,
-            in_flight_fence
+            command_buffers,
+            image_available_semaphores,
+            render_finished_semaphores,
+            in_flight_fences,
+            current_frame: 0,
         }
     }
 }
@@ -203,9 +216,9 @@ impl FrameRenderer {
 impl Drop for FrameRenderer {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_semaphore(self.image_available_semaphore, None);
-            self.device.destroy_semaphore(self.render_finished_semaphore, None);
-            self.device.destroy_fence(self.in_flight_fence, None);
+            self.image_available_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
+            self.render_finished_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
+            self.in_flight_fences.iter().for_each(|fence| self.device.destroy_fence(*fence, None));
             self.device.destroy_command_pool(self.command_pool, None);
         }
     }

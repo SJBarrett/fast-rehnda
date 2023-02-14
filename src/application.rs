@@ -28,7 +28,7 @@ impl Application {
         }
     }
 
-    pub fn main_loop(self, event_loop: EventLoop<()>) {
+    pub fn main_loop(mut self, event_loop: EventLoop<()>) {
         event_loop.run(move |event, _, control_flow| {
             match event {
                 Event::WindowEvent {
