@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ash::vk;
 use crate::{etna};
 use crate::etna::shader::load_shader_module_from_file;
+use crate::model::Vertex;
 
 pub struct Pipeline {
     device: Arc<etna::Device>,
@@ -30,7 +31,12 @@ impl Pipeline {
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(vert_shader_module)
             .name(main_function_name.as_c_str());
-        let vertex_input_ci = vk::PipelineVertexInputStateCreateInfo::builder();
+        let vertex_binding_descriptions = [Vertex::binding_description()];
+        let vertex_attribute_descriptions = Vertex::attribute_descriptions();
+        let vertex_input_ci = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&vertex_binding_descriptions)
+            .vertex_attribute_descriptions(vertex_attribute_descriptions.as_slice())
+            ;
 
 
         let frag_shader_stage_ci = vk::PipelineShaderStageCreateInfo::builder()
