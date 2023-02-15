@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::ops::Deref;
+use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 use crate::etna;
@@ -13,6 +14,7 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
 ];
 
 pub struct PhysicalDevice {
+    instance: Arc<etna::Instance>,
     physical_device: vk::PhysicalDevice,
     queue_family_indices: QueueFamilyIndices,
 }
@@ -34,7 +36,7 @@ impl PhysicalDevice {
         self.queue_family_indices
     }
 
-    pub fn pick_physical_device(instance: &etna::Instance, surface: &etna::Surface) -> PhysicalDevice {
+    pub fn pick_physical_device(instance: Arc<etna::Instance>, surface: &etna::Surface) -> PhysicalDevice {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
             .expect("Couldn't enumerate physical devices");
         if physical_devices.is_empty() {
@@ -42,14 +44,25 @@ impl PhysicalDevice {
         }
 
         let picked_device = physical_devices.into_iter()
-            .max_by_key(|device| Self::rate_device_suitability(instance, surface, *device))
+            .max_by_key(|device| Self::rate_device_suitability(&instance, surface, *device))
             .expect("Failed to find suitable physical device");
         let chosen_queue_family_indices = instance.find_queue_families(surface, picked_device);
 
         PhysicalDevice {
+            instance,
             physical_device: picked_device,
             queue_family_indices: chosen_queue_family_indices.unwrap(),
         }
+    }
+
+    pub fn find_memory_type(&self, type_filter: u32, properties: vk::MemoryPropertyFlags) -> u32 {
+        let memory_properties = unsafe { self.instance.get_physical_device_memory_properties(self.physical_device) };
+        for i in 0..memory_properties.memory_type_count {
+            if (type_filter & (1u32 << i)) > 0 && memory_properties.memory_types[i as usize].property_flags.contains(properties) {
+                return i;
+            }
+        }
+        panic!("Failed to find suitable memory");
     }
 
     fn rate_device_suitability(instance: &etna::Instance, surface: &etna::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {

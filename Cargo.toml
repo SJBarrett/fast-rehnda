@@ -8,11 +8,13 @@ edition = "2021"
 [dependencies]
 ash = { version = "0.37.2", default_features = false, features = ["linked", "debug"] }
 ash-window = "0.12.0"
-glam = "0.22"
+glam = { version = "0.22", features = ["bytemuck"] }
 winit = "0.27.5"
 raw-window-handle = "0.5.0"
 once_cell = "1.17.0"
 memoffset = "0.8.0"
+bytemuck = "1.13.0"
+bytemuck_derive = "1.4.0"
 
 log = "0.4"
 simplelog = "0.12"

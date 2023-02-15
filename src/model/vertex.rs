@@ -2,14 +2,16 @@ use std::mem::size_of;
 use ash::vk;
 use memoffset::offset_of;
 use crate::core::*;
+use bytemuck_derive::{Zeroable, Pod};
 
 pub const TRIANGLE_VERTICES: [Vertex; 3] = [
-    Vertex { position: Vec2::new(0.0, -0.5), color: ColorRgb::new(1.0, 0.0, 0.0) },
+    Vertex { position: Vec2::new(0.0, -0.5), color: ColorRgb::new(1.0, 1.0, 1.0) },
     Vertex { position: Vec2::new(0.5, 0.5), color: ColorRgb::new(0.0, 1.0, 0.0) },
     Vertex { position: Vec2::new(-0.5, 0.5), color: ColorRgb::new(0.0, 0.0, 1.0) },
 ];
 
 #[repr(C)]
+#[derive(Zeroable, Pod, Debug, Copy, Clone)]
 pub struct Vertex {
     pub position: Vec2,
     pub color: Vec3,
