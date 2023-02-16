@@ -1,5 +1,7 @@
 mod buffer;
 pub use buffer::*;
+mod command_pool;
+pub use command_pool::*;
 mod device;
 pub use device::*;
 mod frame_renderer;

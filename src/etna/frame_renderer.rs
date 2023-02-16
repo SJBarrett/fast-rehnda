@@ -1,13 +1,12 @@
 use std::sync::Arc;
 use ash::vk;
 use crate::etna;
-use crate::etna::{Buffer, QueueFamilyIndices, SwapchainResult};
+use crate::etna::{Buffer, CommandPool, SwapchainResult};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
-    command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     // sync objects
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -194,19 +193,8 @@ struct TransitionProps {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, queue_family_indices: &QueueFamilyIndices) -> FrameRenderer {
-        let command_pool_ci = vk::CommandPoolCreateInfo::builder()
-            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-            .queue_family_index(queue_family_indices.graphics_family);
-        let command_pool = unsafe { device.create_command_pool(&command_pool_ci, None) }
-            .expect("Failed to create command pool");
-
-        let command_buffer_alloc_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(command_pool)
-            .command_buffer_count(MAX_FRAMES_IN_FLIGHT as u32)
-            .level(vk::CommandBufferLevel::PRIMARY);
-        let command_buffers = unsafe { device.allocate_command_buffers(&command_buffer_alloc_info) }
-            .expect("Failed to allocation command buffer");
+    pub fn create(device: Arc<etna::Device>, command_pool: &CommandPool) -> FrameRenderer {
+        let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
         let signaled_fence_ci = vk::FenceCreateInfo::builder()
@@ -227,7 +215,6 @@ impl FrameRenderer {
 
         FrameRenderer {
             device,
-            command_pool,
             command_buffers,
             image_available_semaphores,
             render_finished_semaphores,
@@ -243,7 +230,6 @@ impl Drop for FrameRenderer {
             self.image_available_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
             self.render_finished_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
             self.in_flight_fences.iter().for_each(|fence| self.device.destroy_fence(*fence, None));
-            self.device.destroy_command_pool(self.command_pool, None);
         }
     }
 }

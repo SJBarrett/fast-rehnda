@@ -10,6 +10,7 @@ use crate::model::{TRIANGLE_VERTICES, Vertex};
 pub struct EtnaEngine {
     // sync objects above here
     vertex_buffer: etna::Buffer,
+    command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
     swapchain: etna::Swapchain,
@@ -36,18 +37,17 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device.queue_families());
+        let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &command_pool);
 
         let buffer_data: &[u8] = bytemuck::cast_slice(&TRIANGLE_VERTICES);
-        let vertex_buffer = etna::Buffer::create(
-            device.clone(),
-            &physical_device,
-            BufferCreateInfo {
-                size: (size_of::<Vertex>() * TRIANGLE_VERTICES.len()) as u64,
-                usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-                data: buffer_data,
-            }
-        );
+
+        let mut vertex_buffer = etna::Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
+            size: buffer_data.len() as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        });
+        vertex_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, buffer_data);
 
 
         EtnaEngine {
@@ -61,6 +61,7 @@ impl EtnaEngine {
             pipeline,
             frame_renderer,
             vertex_buffer,
+            command_pool,
         }
     }
 
