@@ -17,10 +17,10 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, vertex_buffer: &Buffer) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, vertex_buffer: &Buffer, index_buffer: &Buffer) -> SwapchainResult<()> {
         let image_index = self.prepare_to_draw(swapchain)?;
 
-        self.record_draw_commands(swapchain, pipeline, image_index, vertex_buffer);
+        self.record_draw_commands(swapchain, pipeline, image_index, vertex_buffer, index_buffer);
 
         self.submit_draw(swapchain, image_index)?;
         Ok(())
@@ -60,7 +60,7 @@ impl FrameRenderer {
         Ok(image_index)
     }
 
-    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32, vertex_buffer: &Buffer) {
+    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32, vertex_buffer: &Buffer, index_buffer: &Buffer) {
         let command_buffer = self.current_command_buffer();
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
@@ -120,9 +120,10 @@ impl FrameRenderer {
         let buffers = &[vertex_buffer.buffer];
         let offsets = &[0u64];
         unsafe { self.device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets) };
+        unsafe { self.device.cmd_bind_index_buffer(command_buffer, index_buffer.buffer, 0, vk::IndexType::UINT16) };
 
         // TODO don't use hardcoded vertex count, instead use a model vert count
-        unsafe { self.device.cmd_draw(command_buffer, 3, 1, 0, 0) };
+        unsafe { self.device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0) };
         unsafe { self.device.cmd_end_rendering(command_buffer) };
 
         // For dynamic rendering we must manually transition the image layout for presentation

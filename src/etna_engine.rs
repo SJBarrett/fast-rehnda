@@ -1,15 +1,17 @@
-use std::mem::size_of;
 use std::sync::Arc;
+
 use ash::vk;
-use log::{debug, info};
+use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+
 use crate::etna;
 use crate::etna::{BufferCreateInfo, SwapchainError};
-use crate::model::{TRIANGLE_VERTICES, Vertex};
+use crate::model::{TRIANGLE_INDICES, TRIANGLE_VERTICES};
 
 pub struct EtnaEngine {
     // sync objects above here
     vertex_buffer: etna::Buffer,
+    index_buffer: etna::Buffer,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
@@ -48,6 +50,13 @@ impl EtnaEngine {
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
         vertex_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, buffer_data);
+        let index_buffer_data: &[u8] = bytemuck::cast_slice(&TRIANGLE_INDICES);
+        let mut index_buffer = etna::Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
+            size: index_buffer_data.len() as u64,
+            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        });
+        index_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, index_buffer_data);
 
 
         EtnaEngine {
@@ -61,6 +70,7 @@ impl EtnaEngine {
             pipeline,
             frame_renderer,
             vertex_buffer,
+            index_buffer,
             command_pool,
         }
     }
@@ -71,7 +81,7 @@ impl EtnaEngine {
             return;
         }
 
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.vertex_buffer);
+        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.vertex_buffer, &self.index_buffer);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
