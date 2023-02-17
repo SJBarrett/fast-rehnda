@@ -6,12 +6,11 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::etna;
 use crate::etna::{BufferCreateInfo, SwapchainError};
-use crate::model::{TRIANGLE_INDICES, TRIANGLE_VERTICES};
+use crate::model::{Model, TRIANGLE_INDICES, TRIANGLE_VERTICES};
 
 pub struct EtnaEngine {
     // sync objects above here
-    vertex_buffer: etna::Buffer,
-    index_buffer: etna::Buffer,
+    model: Model,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
@@ -41,22 +40,7 @@ impl EtnaEngine {
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
         let frame_renderer = etna::FrameRenderer::create(device.clone(), &command_pool);
-
-        let buffer_data: &[u8] = bytemuck::cast_slice(&TRIANGLE_VERTICES);
-
-        let mut vertex_buffer = etna::Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
-            size: buffer_data.len() as u64,
-            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        });
-        vertex_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, buffer_data);
-        let index_buffer_data: &[u8] = bytemuck::cast_slice(&TRIANGLE_INDICES);
-        let mut index_buffer = etna::Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
-            size: index_buffer_data.len() as u64,
-            usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        });
-        index_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, index_buffer_data);
+        let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES);
 
 
         EtnaEngine {
@@ -69,8 +53,7 @@ impl EtnaEngine {
             swapchain,
             pipeline,
             frame_renderer,
-            vertex_buffer,
-            index_buffer,
+            model,
             command_pool,
         }
     }
@@ -81,7 +64,7 @@ impl EtnaEngine {
             return;
         }
 
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.vertex_buffer, &self.index_buffer);
+        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.model);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {

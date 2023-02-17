@@ -2,6 +2,7 @@ use std::sync::Arc;
 use ash::vk;
 use crate::etna;
 use crate::etna::{Buffer, CommandPool, SwapchainResult};
+use crate::model::Model;
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -17,10 +18,10 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, vertex_buffer: &Buffer, index_buffer: &Buffer) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, model: &Model) -> SwapchainResult<()> {
         let image_index = self.prepare_to_draw(swapchain)?;
 
-        self.record_draw_commands(swapchain, pipeline, image_index, vertex_buffer, index_buffer);
+        self.record_draw_commands(swapchain, pipeline, image_index, model);
 
         self.submit_draw(swapchain, image_index)?;
         Ok(())
@@ -60,7 +61,7 @@ impl FrameRenderer {
         Ok(image_index)
     }
 
-    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32, vertex_buffer: &Buffer, index_buffer: &Buffer) {
+    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32, model: &Model) {
         let command_buffer = self.current_command_buffer();
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
@@ -117,10 +118,10 @@ impl FrameRenderer {
             .build()];
         unsafe { self.device.cmd_set_scissor(command_buffer, 0, &scissor); }
 
-        let buffers = &[vertex_buffer.buffer];
+        let buffers = &[model.vertex_buffer.buffer];
         let offsets = &[0u64];
         unsafe { self.device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets) };
-        unsafe { self.device.cmd_bind_index_buffer(command_buffer, index_buffer.buffer, 0, vk::IndexType::UINT16) };
+        unsafe { self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16) };
 
         // TODO don't use hardcoded vertex count, instead use a model vert count
         unsafe { self.device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0) };
