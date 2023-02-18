@@ -50,30 +50,15 @@ impl Buffer {
         unsafe { staging_buffer_memory.copy_from_nonoverlapping(data.as_ptr() as *const c_void, data.len()); }
         unsafe { self.device.unmap_memory(staging_buffer.memory); }
 
-        let command_buffer = command_pool.allocate_command_buffers(1)[0];
-        unsafe {
-            self.device.begin_command_buffer(command_buffer, &vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build()).expect("Failed to begin command buffer for copying to buffer");
-            let copy_region = [
-                vk::BufferCopy::builder()
-                    .size(self.size)
-                    .build()
-            ];
-            self.device.cmd_copy_buffer(command_buffer, staging_buffer.buffer, self.buffer, &copy_region);
-            self.device.end_command_buffer(command_buffer).expect("Failed to stop command buffer after copying");
-        }
-        let command_buffers = &[command_buffer];
-        let queue_submit_infos = [
-            vk::SubmitInfo::builder()
-            .command_buffers(command_buffers)
-            .build()
+        let command_buffer = command_pool.one_time_command_buffer();
+
+        let copy_region = [
+            vk::BufferCopy::builder()
+                .size(self.size)
+                .build()
         ];
-        unsafe { self.device.queue_submit(self.device.graphics_queue, &queue_submit_infos, vk::Fence::null()) }
-            .expect("Failed to submit queue");
-        unsafe { self.device.queue_wait_idle(self.device.graphics_queue) }
-            .expect("Failed to wait for queue idle");
-        unsafe { self.device.free_command_buffers(command_pool.vk(), command_buffers) };
+        unsafe { self.device.cmd_copy_buffer(*command_buffer, staging_buffer.buffer, self.buffer, &copy_region); }
+
     }
 
     pub fn create_empty_buffer(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo) -> Buffer {

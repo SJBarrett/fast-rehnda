@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use ash::vk;
 use crate::etna;
-use crate::etna::{Buffer, CommandPool, SwapchainResult};
+use crate::etna::{CommandPool, image_transitions, SwapchainResult};
 use crate::model::Model;
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -68,7 +68,7 @@ impl FrameRenderer {
             .expect("Failed to being recording command buffer");
 
         // with dynamic rendering we need to make the output image ready for writing to
-        self.transition_image_layout(swapchain.images[image_index as usize], &TransitionProps {
+        image_transitions::transition_image_layout(&self.device, &self.current_command_buffer(), swapchain.images[image_index as usize], &image_transitions::TransitionProps {
             old_layout: vk::ImageLayout::UNDEFINED,
             src_access_mask: vk::AccessFlags2::empty(),
             src_stage_mask: vk::PipelineStageFlags2::TOP_OF_PIPE,
@@ -130,7 +130,7 @@ impl FrameRenderer {
         // For dynamic rendering we must manually transition the image layout for presentation
         // after drawing. This means changing it from a "color attachment write" to a "present".
         // This happens at the very last stage of render (i.e. BOTTOM_OF_PIPE)
-        self.transition_image_layout(swapchain.images[image_index as usize], &TransitionProps {
+        image_transitions::transition_image_layout(&self.device, &self.current_command_buffer(), swapchain.images[image_index as usize], &image_transitions::TransitionProps {
             old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
             src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
@@ -141,30 +141,6 @@ impl FrameRenderer {
 
         unsafe { self.device.end_command_buffer(command_buffer) }
             .expect("Failed to record command buffer");
-    }
-
-    fn transition_image_layout(&self, image: vk::Image, transition: &TransitionProps) {
-        let image_memory_barrier = vk::ImageMemoryBarrier2::builder()
-            .src_access_mask(transition.src_access_mask)
-            .src_stage_mask(transition.src_stage_mask)
-            .old_layout(transition.old_layout)
-            .new_layout(transition.new_layout)
-            .dst_stage_mask(transition.dst_stage_mask)
-            .dst_access_mask(transition.dst_access_mask)
-            .image(image)
-            .subresource_range(vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0)
-                .level_count(1)
-                .base_array_layer(0)
-                .layer_count(1)
-                .build()
-            );
-        let image_mem_barriers = &[image_memory_barrier.build()];
-        let dep_info = vk::DependencyInfo::builder()
-            .image_memory_barriers(image_mem_barriers);
-        // make the transition to present happen
-        unsafe { self.device.cmd_pipeline_barrier2(self.current_command_buffer(), &dep_info) };
     }
     
     fn current_command_buffer(&self) -> vk::CommandBuffer {
@@ -182,15 +158,6 @@ impl FrameRenderer {
     fn current_in_flight_fence(&self) -> vk::Fence {
         self.in_flight_fences[self.current_frame]
     }
-}
-
-struct TransitionProps {
-    old_layout: vk::ImageLayout,
-    src_access_mask: vk::AccessFlags2,
-    src_stage_mask: vk::PipelineStageFlags2,
-    new_layout: vk::ImageLayout,
-    dst_access_mask: vk::AccessFlags2,
-    dst_stage_mask: vk::PipelineStageFlags2,
 }
 
 // initialisation

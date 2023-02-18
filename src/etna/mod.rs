@@ -16,6 +16,11 @@ mod swapchain;
 pub use swapchain::*;
 mod pipeline;
 pub use pipeline::*;
+mod texture;
+pub use texture::*;
+
+mod aggregate_commands;
+pub use aggregate_commands::*;
 
 pub mod utility;
 mod debug;
