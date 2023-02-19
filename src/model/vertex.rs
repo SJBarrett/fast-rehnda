@@ -5,10 +5,10 @@ use crate::core::*;
 use bytemuck_derive::{Zeroable, Pod};
 
 pub const TRIANGLE_VERTICES: [Vertex; 4] = [
-    Vertex { position: Vec2::new(-0.5, -0.5), color: ColorRgb::new(1.0, 0.0, 0.0) },
-    Vertex { position: Vec2::new(0.5, -0.5), color: ColorRgb::new(0.0, 1.0, 0.0) },
-    Vertex { position: Vec2::new(0.5, 0.5), color: ColorRgb::new(0.0, 0.0, 1.0) },
-    Vertex { position: Vec2::new(-0.5, 0.5), color: ColorRgb::new(1.0, 1.0, 1.0) },
+    Vertex { position: Vec2::new(-0.5, -0.5), color: ColorRgb::new(1.0, 0.0, 0.0), texture_coord: Vec2::new(1.0, 0.0) },
+    Vertex { position: Vec2::new(0.5, -0.5), color: ColorRgb::new(0.0, 1.0, 0.0), texture_coord: Vec2::new(0.0, 0.0) },
+    Vertex { position: Vec2::new(0.5, 0.5), color: ColorRgb::new(0.0, 0.0, 1.0), texture_coord: Vec2::new(0.0, 1.0) },
+    Vertex { position: Vec2::new(-0.5, 0.5), color: ColorRgb::new(1.0, 1.0, 1.0), texture_coord: Vec2::new(1.0, 1.0) },
 ];
 
 pub const TRIANGLE_INDICES: [u16; 6] = [
@@ -20,6 +20,7 @@ pub const TRIANGLE_INDICES: [u16; 6] = [
 pub struct Vertex {
     pub position: Vec2,
     pub color: Vec3,
+    pub texture_coord: Vec2,
 }
 
 impl Vertex {
@@ -46,6 +47,12 @@ impl Vertex {
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
                 .offset(offset_of!(Vertex, color) as u32)
+                .build(),
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(2)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(offset_of!(Vertex, texture_coord) as u32)
                 .build(),
         ]
     }

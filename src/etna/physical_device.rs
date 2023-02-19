@@ -16,6 +16,8 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
 pub struct PhysicalDevice {
     instance: Arc<etna::Instance>,
     physical_device: vk::PhysicalDevice,
+    pub device_properties: vk::PhysicalDeviceProperties,
+    pub supported_features: vk::PhysicalDeviceFeatures,
     queue_family_indices: QueueFamilyIndices,
 }
 
@@ -47,10 +49,13 @@ impl PhysicalDevice {
             .max_by_key(|device| Self::rate_device_suitability(&instance, surface, *device))
             .expect("Failed to find suitable physical device");
         let chosen_queue_family_indices = instance.find_queue_families(surface, picked_device);
-
+        let device_properties = unsafe { instance.get_physical_device_properties(picked_device) };
+        let supported_features = unsafe { instance.get_physical_device_features(picked_device) };
         PhysicalDevice {
             instance,
             physical_device: picked_device,
+            device_properties,
+            supported_features,
             queue_family_indices: chosen_queue_family_indices.unwrap(),
         }
     }
@@ -80,6 +85,10 @@ impl PhysicalDevice {
             score += 1000;
         }
         score += properties.limits.max_image_dimension2_d as usize;
+
+        if features.sampler_anisotropy == vk::TRUE {
+            score += 100;
+        }
 
         // are our required device queue type supported?
         let queue_family_indices = instance.find_queue_families(surface, physical_device);

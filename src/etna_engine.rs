@@ -1,25 +1,25 @@
+use std::path::Path;
 use std::sync::Arc;
 
-use ash::vk;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::etna;
-use crate::etna::{BufferCreateInfo, SwapchainError};
+use crate::etna::SwapchainError;
 use crate::model::{Model, TRIANGLE_INDICES, TRIANGLE_VERTICES};
 
 pub struct EtnaEngine {
     // sync objects above here
     model: Model,
-    command_pool: etna::CommandPool,
+    _command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
     physical_device: etna::PhysicalDevice,
     device: Arc<etna::Device>,
-    instance: Arc<etna::Instance>,
-    entry: ash::Entry,
+    _instance: Arc<etna::Instance>,
+    _entry: ash::Entry,
     window: Arc<winit::window::Window>,
 }
 
@@ -29,7 +29,7 @@ impl EtnaEngine {
         let instance = Arc::new(etna::Instance::new(&entry));
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
         let physical_device = etna::PhysicalDevice::pick_physical_device(instance.clone(), &surface);
-        let device = Arc::new(etna::Device::create(&instance, &surface, physical_device.vk()));
+        let device = Arc::new(etna::Device::create(&instance, &surface, &physical_device));
         let swapchain = etna::Swapchain::create(
             &instance,
             device.clone(),
@@ -39,14 +39,14 @@ impl EtnaEngine {
         );
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool);
-        let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES);
+        let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES, Path::new("assets/textures/texture.jpg"));
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, &model);
 
 
         EtnaEngine {
             window,
-            entry,
-            instance,
+            _entry: entry,
+            _instance: instance,
             surface,
             physical_device,
             device,
@@ -54,7 +54,7 @@ impl EtnaEngine {
             pipeline,
             frame_renderer,
             model,
-            command_pool,
+            _command_pool: command_pool,
         }
     }
 

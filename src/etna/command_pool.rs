@@ -34,10 +34,6 @@ impl CommandPool {
     pub fn one_time_command_buffer(&self) -> OneTimeCommandBuffer {
         OneTimeCommandBuffer::start(self.device.clone(), self.command_pool)
     }
-
-    pub fn vk(&self) -> vk::CommandPool {
-        self.command_pool
-    }
 }
 
 impl Drop for CommandPool {

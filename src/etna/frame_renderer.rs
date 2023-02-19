@@ -195,7 +195,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool) -> FrameRenderer {
+    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
@@ -215,17 +215,24 @@ impl FrameRenderer {
                 .expect("Failed to create fence"));
         }
 
-        let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|index| {
+        let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| {
             HostMappedBuffer::create(device.clone(), physical_device, HostMappedBufferCreateInfo {
                 size: size_of::<TransformationMatrices>() as u64,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             })
         }).collect();
 
-        let descriptor_pool_size = vk::DescriptorPoolSize::builder()
-            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32);
+        let transform_ub_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let texture_sampler_pool_size = vk::DescriptorPoolSize::builder()
+            .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+            .build();
+        let pool_sizes = &[transform_ub_pool_size, texture_sampler_pool_size];
         let descriptor_pool_ci = vk::DescriptorPoolCreateInfo::builder()
-            .pool_sizes(std::slice::from_ref(&descriptor_pool_size))
+            .pool_sizes(pool_sizes)
             .max_sets(MAX_FRAMES_IN_FLIGHT as u32);
         let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_ci, None) }
             .expect("Failed to create descriptor pool");
@@ -242,13 +249,26 @@ impl FrameRenderer {
                 .buffer(uniform_buffers[i].vk_buffer())
                 .offset(0)
                 .range(size_of::<TransformationMatrices>() as u64);
-            let write_descriptor_set = vk::WriteDescriptorSet::builder()
+            let image_info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(model.texture.image_view)
+                .sampler(model.texture.sampler);
+            let write_transforms_set = vk::WriteDescriptorSet::builder()
                 .dst_set(descriptor_sets[i])
                 .dst_binding(0)
                 .dst_array_element(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
-            unsafe { device.update_descriptor_sets(std::slice::from_ref(&write_descriptor_set), &[]); }
+                .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
+                .build();
+            let write_image_set = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[i])
+                .dst_binding(1)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .image_info(std::slice::from_ref(&image_info))
+                .build();
+            let write_sets = &[write_transforms_set, write_image_set];
+            unsafe { device.update_descriptor_sets(write_sets, &[]); }
         }
 
         FrameRenderer {

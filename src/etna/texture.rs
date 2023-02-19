@@ -6,15 +6,19 @@ use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, image_transitio
 
 pub struct Texture {
     device: Arc<Device>,
-    texture_image: vk::Image,
-    texture_memory: vk::DeviceMemory,
+    image: vk::Image,
+    device_memory: vk::DeviceMemory,
+    pub image_view: vk::ImageView,
+    pub sampler: vk::Sampler,
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_image(self.texture_image, None);
-            self.device.free_memory(self.texture_memory, None);
+            self.device.destroy_sampler(self.sampler, None);
+            self.device.destroy_image_view(self.image_view, None);
+            self.device.destroy_image(self.image, None);
+            self.device.free_memory(self.device_memory, None);
         }
     }
 }
@@ -29,10 +33,10 @@ impl Texture {
             memory_properties: vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         }, rgba_img.as_bytes());
 
-        let (texture_image, texture_memory) = Self::create_image(&device, physical_device, &ImageCreateInfo {
+        let (texture_image, image_view, texture_memory) = Self::create_image(&device, physical_device, &ImageCreateInfo {
             width: rgba_img.width(),
             height: rgba_img.height(),
-            format: vk::Format::R8G8B8A8_SINT,
+            format: vk::Format::R8G8B8A8_SRGB,
             tiling: vk::ImageTiling::OPTIMAL,
             usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -68,14 +72,41 @@ impl Texture {
         unsafe { device.cmd_copy_buffer_to_image(*command_buffer, src_buffer.buffer, texture_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, copy_regions) };
         image_transitions::transition_image_layout(&device, &command_buffer, texture_image, &image_transitions::TransitionProps::transfer_dst_to_shader_read());
 
+        let sampler_create_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            // only use anisotropy if the feature is enabled
+            .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
+            .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
+                physical_device.device_properties.limits.max_sampler_anisotropy
+            } else {
+                1.0
+            })
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(0.0);
+
+        let sampler = unsafe { device.create_sampler(&sampler_create_info, None) }
+            .expect("Failed to create sampler for Texture");
+
         Texture {
             device,
-            texture_image,
-            texture_memory,
+            image: texture_image,
+            device_memory: texture_memory,
+            image_view,
+            sampler,
         }
     }
 
-    fn create_image(device: &Device, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> (vk::Image, vk::DeviceMemory) {
+    fn create_image(device: &Device, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> (vk::Image, vk::ImageView, vk::DeviceMemory) {
         let image_ci = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(vk::Extent3D {
@@ -105,7 +136,22 @@ impl Texture {
         unsafe { device.bind_image_memory(texture_image, texture_memory, 0) }
             .expect("Failed to bind image memory for texture");
 
-        (texture_image, texture_memory)
+        let view_ci = vk::ImageViewCreateInfo::builder()
+            .image(texture_image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(create_info.format)
+            .subresource_range(vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build()
+            );
+        let image_view = unsafe { device.create_image_view(&view_ci, None) }
+            .expect("Failed to create image view");
+
+        (texture_image, image_view, texture_memory)
     }
 }
 
