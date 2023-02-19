@@ -251,7 +251,7 @@ impl FrameRenderer {
                 .range(size_of::<TransformationMatrices>() as u64);
             let image_info = vk::DescriptorImageInfo::builder()
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(model.texture.image_view)
+                .image_view(model.texture.image.image_view)
                 .sampler(model.texture.sampler);
             let write_transforms_set = vk::WriteDescriptorSet::builder()
                 .dst_set(descriptor_sets[i])

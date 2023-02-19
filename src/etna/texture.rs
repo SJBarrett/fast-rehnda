@@ -4,11 +4,81 @@ use ash::vk;
 use image::EncodableLayout;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, image_transitions, PhysicalDevice};
 
+pub struct Image {
+    device: Arc<Device>,
+    pub vk_image: vk::Image,
+    pub device_memory: vk::DeviceMemory,
+    pub image_view: vk::ImageView,
+}
+
+impl Drop for Image {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_image_view(self.image_view, None);
+            self.device.destroy_image(self.vk_image, None);
+            self.device.free_memory(self.device_memory, None);
+        }
+    }
+}
+
+impl Image {
+    fn create_image(device: Arc<Device>, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> Image {
+        let image_ci = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width: create_info.width,
+                height: create_info.height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(create_info.format)
+            .tiling(create_info.tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(create_info.usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            ;
+
+        let image = unsafe { device.create_image(&image_ci, None) }
+            .expect("Failed to create image for texture");
+
+        let memory_requirements = unsafe { device.get_image_memory_requirements(image) };
+        let alloc_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(memory_requirements.size)
+            .memory_type_index(physical_device.find_memory_type(memory_requirements.memory_type_bits, create_info.memory_properties));
+        let device_memory = unsafe { device.allocate_memory(&alloc_info, None) }
+            .expect("Failed to allocate memory for texture");
+        unsafe { device.bind_image_memory(image, device_memory, 0) }
+            .expect("Failed to bind image memory for texture");
+
+        let view_ci = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(create_info.format)
+            .subresource_range(vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1)
+                .build()
+            );
+        let image_view = unsafe { device.create_image_view(&view_ci, None) }
+            .expect("Failed to create image view");
+
+        Image {
+            device,
+            vk_image: image,
+            image_view,
+            device_memory,
+        }
+    }
+}
+
 pub struct Texture {
     device: Arc<Device>,
-    image: vk::Image,
-    device_memory: vk::DeviceMemory,
-    pub image_view: vk::ImageView,
+    pub image: Image,
     pub sampler: vk::Sampler,
 }
 
@@ -16,9 +86,7 @@ impl Drop for Texture {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_sampler(self.sampler, None);
-            self.device.destroy_image_view(self.image_view, None);
-            self.device.destroy_image(self.image, None);
-            self.device.free_memory(self.device_memory, None);
+
         }
     }
 }
@@ -33,7 +101,7 @@ impl Texture {
             memory_properties: vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         }, rgba_img.as_bytes());
 
-        let (texture_image, image_view, texture_memory) = Self::create_image(&device, physical_device, &ImageCreateInfo {
+        let image = Image::create_image(device.clone(), physical_device, &ImageCreateInfo {
             width: rgba_img.width(),
             height: rgba_img.height(),
             format: vk::Format::R8G8B8A8_SRGB,
@@ -44,7 +112,7 @@ impl Texture {
 
         let command_buffer = command_pool.one_time_command_buffer();
 
-        image_transitions::transition_image_layout(&device, &command_buffer, texture_image, &image_transitions::TransitionProps::undefined_to_transfer_dst());
+        image_transitions::transition_image_layout(&device, &command_buffer, image.vk_image, &image_transitions::TransitionProps::undefined_to_transfer_dst());
 
         let copy_region = vk::BufferImageCopy::builder()
             .buffer_offset(0)
@@ -69,8 +137,8 @@ impl Texture {
             .build();
         let copy_regions = &[copy_region];
 
-        unsafe { device.cmd_copy_buffer_to_image(*command_buffer, src_buffer.buffer, texture_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, copy_regions) };
-        image_transitions::transition_image_layout(&device, &command_buffer, texture_image, &image_transitions::TransitionProps::transfer_dst_to_shader_read());
+        unsafe { device.cmd_copy_buffer_to_image(*command_buffer, src_buffer.buffer, image.vk_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, copy_regions) };
+        image_transitions::transition_image_layout(&device, &command_buffer, image.vk_image, &image_transitions::TransitionProps::transfer_dst_to_shader_read());
 
         let sampler_create_info = vk::SamplerCreateInfo::builder()
             .mag_filter(vk::Filter::LINEAR)
@@ -99,60 +167,12 @@ impl Texture {
 
         Texture {
             device,
-            image: texture_image,
-            device_memory: texture_memory,
-            image_view,
+            image,
             sampler,
         }
     }
 
-    fn create_image(device: &Device, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> (vk::Image, vk::ImageView, vk::DeviceMemory) {
-        let image_ci = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
-            .extent(vk::Extent3D {
-                width: create_info.width,
-                height: create_info.height,
-                depth: 1,
-            })
-            .mip_levels(1)
-            .array_layers(1)
-            .format(create_info.format)
-            .tiling(create_info.tiling)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(create_info.usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            ;
 
-        let texture_image = unsafe { device.create_image(&image_ci, None) }
-            .expect("Failed to create image for texture");
-
-        let memory_requirements = unsafe { device.get_image_memory_requirements(texture_image) };
-        let alloc_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(memory_requirements.size)
-            .memory_type_index(physical_device.find_memory_type(memory_requirements.memory_type_bits, create_info.memory_properties));
-        let texture_memory = unsafe { device.allocate_memory(&alloc_info, None) }
-            .expect("Failed to allocate memory for texture");
-        unsafe { device.bind_image_memory(texture_image, texture_memory, 0) }
-            .expect("Failed to bind image memory for texture");
-
-        let view_ci = vk::ImageViewCreateInfo::builder()
-            .image(texture_image)
-            .view_type(vk::ImageViewType::TYPE_2D)
-            .format(create_info.format)
-            .subresource_range(vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0)
-                .level_count(1)
-                .base_array_layer(0)
-                .layer_count(1)
-                .build()
-            );
-        let image_view = unsafe { device.create_image_view(&view_ci, None) }
-            .expect("Failed to create image view");
-
-        (texture_image, image_view, texture_memory)
-    }
 }
 
 struct ImageCreateInfo {
