@@ -70,6 +70,18 @@ impl PhysicalDevice {
         panic!("Failed to find suitable memory");
     }
 
+    pub fn find_supported_format(&self, candidates: &[vk::Format], tiling: vk::ImageTiling, features: vk::FormatFeatureFlags) -> Option<vk::Format> {
+        for candidate in candidates {
+            let format_props = unsafe { self.instance.get_physical_device_format_properties(self.physical_device, *candidate) };
+            if tiling == vk::ImageTiling::LINEAR && (format_props.linear_tiling_features & features) == features {
+                return Some(*candidate);
+            } else if tiling == vk::ImageTiling::OPTIMAL && (format_props.optimal_tiling_features & features) == features {
+                return Some(*candidate);
+            }
+        }
+        None
+    }
+
     fn rate_device_suitability(instance: &etna::Instance, surface: &etna::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {
         let properties = unsafe { instance.get_physical_device_properties(physical_device) };
         let features = unsafe { instance.get_physical_device_features(physical_device) };

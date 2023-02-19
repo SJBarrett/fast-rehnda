@@ -11,7 +11,7 @@ use crate::model::{Model, TRIANGLE_INDICES, TRIANGLE_VERTICES};
 pub struct EtnaEngine {
     // sync objects above here
     model: Model,
-    _command_pool: etna::CommandPool,
+    command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
     swapchain: etna::Swapchain,
@@ -40,7 +40,7 @@ impl EtnaEngine {
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
         let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES, Path::new("assets/textures/texture.jpg"));
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, &model);
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, swapchain.extent, &model);
 
 
         EtnaEngine {
@@ -54,7 +54,7 @@ impl EtnaEngine {
             pipeline,
             frame_renderer,
             model,
-            _command_pool: command_pool,
+            command_pool: command_pool,
         }
     }
 
@@ -76,6 +76,7 @@ impl EtnaEngine {
                     &self.physical_device.queue_families(),
                     self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
                 );
+                self.frame_renderer.resize(&self.physical_device, &self.command_pool, self.swapchain.extent);
             }
         }
     }

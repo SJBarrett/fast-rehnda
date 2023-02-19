@@ -5,7 +5,7 @@ use ash::vk;
 use lazy_static::lazy_static;
 use crate::core::{Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Pipeline, SwapchainResult};
+use crate::etna::{CommandPool, DepthBuffer, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Pipeline, SwapchainResult};
 use crate::model::{Model, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -16,6 +16,7 @@ lazy_static! {
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
     descriptor_pool: vk::DescriptorPool,
+    depth_buffer: DepthBuffer,
     descriptor_sets: Vec<vk::DescriptorSet>,
     command_buffers: Vec<vk::CommandBuffer>,
     // sync objects
@@ -27,6 +28,10 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
+    pub fn resize(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &CommandPool,  new_size: vk::Extent2D) {
+        self.depth_buffer = DepthBuffer::create(self.device.clone(), physical_device, command_pool, new_size);
+    }
+
     pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &Pipeline, model: &Model) -> SwapchainResult<()> {
         let image_index = self.prepare_to_draw(swapchain)?;
 
@@ -102,6 +107,7 @@ impl FrameRenderer {
             new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
             dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            aspect_mask: vk::ImageAspectFlags::COLOR,
         });
 
         let clear_color = vk::ClearValue {
@@ -116,15 +122,23 @@ impl FrameRenderer {
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
             .clear_value(clear_color);
+        let depth_attachment_info = vk::RenderingAttachmentInfo::builder()
+            .image_view(self.depth_buffer.image.image_view)
+            .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .clear_value(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue { depth: 1.0, stencil: 0 }
+            });
 
-        let color_attachments = &[color_attachment_info.build()];
         let rendering_info = vk::RenderingInfo::builder()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent: swapchain.extent(),
             })
             .layer_count(1)
-            .color_attachments(color_attachments);
+            .color_attachments(std::slice::from_ref(&color_attachment_info))
+            .depth_attachment(&depth_attachment_info);
 
         unsafe { self.device.cmd_begin_rendering(command_buffer, &rendering_info); }
         unsafe { self.device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
@@ -170,6 +184,7 @@ impl FrameRenderer {
             new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
             dst_stage_mask: vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
             dst_access_mask: vk::AccessFlags2::empty(),
+            aspect_mask: vk::ImageAspectFlags::COLOR,
         });
 
         unsafe { self.device.end_command_buffer(command_buffer) }
@@ -195,7 +210,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, model: &Model) -> FrameRenderer {
+    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, extent: vk::Extent2D, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
@@ -271,9 +286,11 @@ impl FrameRenderer {
             unsafe { device.update_descriptor_sets(write_sets, &[]); }
         }
 
+        let depth_buffer = DepthBuffer::create(device.clone(), physical_device, command_pool, extent);
         FrameRenderer {
             device,
             uniform_buffers,
+            depth_buffer,
             descriptor_pool,
             descriptor_sets,
             command_buffers,

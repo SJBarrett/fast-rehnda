@@ -9,6 +9,7 @@ pub mod image_transitions {
         pub new_layout: vk::ImageLayout,
         pub dst_access_mask: vk::AccessFlags2,
         pub dst_stage_mask: vk::PipelineStageFlags2,
+        pub aspect_mask: vk::ImageAspectFlags,
     }
 
     impl TransitionProps {
@@ -20,6 +21,7 @@ pub mod image_transitions {
                 new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                 dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                aspect_mask: vk::ImageAspectFlags::COLOR,
             }
         }
 
@@ -31,6 +33,7 @@ pub mod image_transitions {
                 new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 dst_access_mask: vk::AccessFlags2::SHADER_READ,
                 dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+                aspect_mask: vk::ImageAspectFlags::COLOR,
             }
         }
     }
@@ -45,7 +48,7 @@ pub mod image_transitions {
             .dst_access_mask(transition.dst_access_mask)
             .image(image)
             .subresource_range(vk::ImageSubresourceRange::builder()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .aspect_mask(transition.aspect_mask)
                 .base_mip_level(0)
                 .level_count(1)
                 .base_array_layer(0)

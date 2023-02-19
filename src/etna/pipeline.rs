@@ -128,9 +128,17 @@ impl Pipeline {
             .attachments(color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
+        let depth_stencil_ci = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(vk::CompareOp::LESS)
+            .depth_bounds_test_enable(false)
+            .stencil_test_enable(false);
+
         let color_attachment_formats = &[swapchain.image_format];
         let mut pipeline_rendering_create_info = vk::PipelineRenderingCreateInfo::builder()
-            .color_attachment_formats(color_attachment_formats);
+            .color_attachment_formats(color_attachment_formats)
+            .depth_attachment_format(vk::Format::D32_SFLOAT); // TODO don't assume this format
 
         let set_layouts = &[descriptor_set_layout];
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
@@ -152,6 +160,7 @@ impl Pipeline {
             .layout(pipeline_layout)
             .render_pass(vk::RenderPass::null())
             .push_next(&mut pipeline_rendering_create_info)
+            .depth_stencil_state(&depth_stencil_ci)
             .subpass(0);
         let pipeline_create_infos = &[pipeline_ci.build()];
         let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), pipeline_create_infos, None) }
