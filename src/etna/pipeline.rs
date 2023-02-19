@@ -8,7 +8,8 @@ use crate::model::Vertex;
 
 pub struct Pipeline {
     device: Arc<etna::Device>,
-    pipeline_layout: vk::PipelineLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
+    pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 }
 
@@ -17,12 +18,25 @@ impl Drop for Pipeline {
         unsafe {
             self.device.destroy_pipeline(self.pipeline, None);
             self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
         }
     }
 }
 
 impl Pipeline {
     pub fn new(device: Arc<etna::Device>, swapchain: &etna::Swapchain) -> Pipeline {
+        let transformation_matrices_layout_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            .build();
+        let bindings = &[transformation_matrices_layout_binding];
+        let descriptor_set_layout_ci = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings);
+        let descriptor_set_layout = unsafe { device.create_descriptor_set_layout(&descriptor_set_layout_ci, None) }
+            .expect("Failed to create descriptor set layout");
+
         let vert_shader_module = load_shader_module_from_file(&device, Path::new("shaders/spirv/shader.vert_spv"));
         let frag_shader_module = load_shader_module_from_file(&device, Path::new("shaders/spirv/shader.frag_spv"));
 
@@ -78,7 +92,7 @@ impl Pipeline {
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0)
             .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false)
             .depth_bias_constant_factor(0.0)
             .depth_bias_clamp(0.0)
@@ -112,8 +126,9 @@ impl Pipeline {
         let mut pipeline_rendering_create_info = vk::PipelineRenderingCreateInfo::builder()
             .color_attachment_formats(color_attachment_formats);
 
+        let set_layouts = &[descriptor_set_layout];
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&[])
+            .set_layouts(set_layouts)
             .push_constant_ranges(&[]);
 
         let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
@@ -142,6 +157,7 @@ impl Pipeline {
         Pipeline {
             device,
             pipeline_layout,
+            descriptor_set_layout,
             pipeline,
         }
     }

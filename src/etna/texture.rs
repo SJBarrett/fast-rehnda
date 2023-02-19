@@ -61,8 +61,9 @@ impl Texture {
                 width: rgba_img.width(),
                 height: rgba_img.height(),
                 depth: 1,
-            });
-        let copy_regions = &[copy_region.build()];
+            })
+            .build();
+        let copy_regions = &[copy_region];
 
         unsafe { device.cmd_copy_buffer_to_image(*command_buffer, src_buffer.buffer, texture_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, copy_regions) };
         image_transitions::transition_image_layout(&device, &command_buffer, texture_image, &image_transitions::TransitionProps::transfer_dst_to_shader_read());

@@ -1,24 +1,33 @@
+use std::mem::size_of;
 use std::sync::Arc;
+use std::time::Instant;
 use ash::vk;
+use lazy_static::lazy_static;
+use crate::core::{Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, image_transitions, SwapchainResult};
-use crate::model::Model;
+use crate::etna::{CommandPool, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Pipeline, SwapchainResult};
+use crate::model::{Model, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
+lazy_static! {
+    static ref RENDERING_START_TIME: Instant = Instant::now();
+}
 
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
+    descriptor_pool: vk::DescriptorPool,
+    descriptor_sets: Vec<vk::DescriptorSet>,
     command_buffers: Vec<vk::CommandBuffer>,
     // sync objects
     image_available_semaphores: Vec<vk::Semaphore>,
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
-
+    uniform_buffers: Vec<HostMappedBuffer>,
     current_frame: usize,
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, model: &Model) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &Pipeline, model: &Model) -> SwapchainResult<()> {
         let image_index = self.prepare_to_draw(swapchain)?;
 
         self.record_draw_commands(swapchain, pipeline, image_index, model);
@@ -35,14 +44,16 @@ impl FrameRenderer {
         let signal_semaphores = &[self.current_render_finished_semaphore()];
         let command_buffers = &[self.current_command_buffer()];
 
+        // update uniforms
+        self.update_uniforms(swapchain.extent.width as f32 / swapchain.extent.height as f32);
+
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
             .wait_dst_stage_mask(wait_stages)
             .signal_semaphores(signal_semaphores)
             .command_buffers(command_buffers);
-        let submits = &[submit_info.build()];
 
-        unsafe { self.device.queue_submit(self.device.graphics_queue, submits, self.current_in_flight_fence()) }
+        unsafe { self.device.queue_submit(self.device.graphics_queue, std::slice::from_ref(&submit_info), self.current_in_flight_fence()) }
             .expect("Failed to submit to graphics queue");
         self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         swapchain.present(image_index, signal_semaphores)
@@ -61,7 +72,23 @@ impl FrameRenderer {
         Ok(image_index)
     }
 
-    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &etna::Pipeline, image_index: u32, model: &Model) {
+    fn update_uniforms(&mut self, aspect_ratio: f32) {
+        let seconds_elapsed = RENDERING_START_TIME.elapsed().as_secs_f32();
+        let mut projection = Mat4::perspective_rh(45.0f32.to_radians(), aspect_ratio, 0.1, 10.0);
+        // flip the y axis (assuming math is OpenGl style)
+        projection.y_axis[1] *= -1.0;
+        // OPTIMISATION Use push constants for transformation matrices
+        let transformation_matrices = TransformationMatrices {
+            model: Mat4::from_rotation_z(seconds_elapsed * 90.0f32.to_radians()),
+            view: Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0)),
+            projection,
+        };
+        let transformations = &[transformation_matrices];
+        let buffer_data: &[u8] = bytemuck::cast_slice(transformations);
+        self.uniform_buffers[self.current_frame].write_data(buffer_data);
+    }
+
+    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &Pipeline, image_index: u32, model: &Model) {
         let command_buffer = self.current_command_buffer();
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
@@ -120,12 +147,18 @@ impl FrameRenderer {
 
         let buffers = &[model.vertex_buffer.buffer];
         let offsets = &[0u64];
-        unsafe { self.device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets) };
-        unsafe { self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16) };
 
-        // TODO don't use hardcoded vertex count, instead use a model vert count
-        unsafe { self.device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0) };
-        unsafe { self.device.cmd_end_rendering(command_buffer) };
+        unsafe {
+            self.device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets);
+            self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
+
+            let descriptor_sets = &[self.descriptor_sets[self.current_frame]];
+            self.device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, descriptor_sets, &[]);
+            // TODO don't use hardcoded vertex count, instead use a model vert count
+            self.device.cmd_draw_indexed(command_buffer, model.index_count, 1, 0, 0, 0);
+            self.device.cmd_end_rendering(command_buffer);
+        }
+
 
         // For dynamic rendering we must manually transition the image layout for presentation
         // after drawing. This means changing it from a "color attachment write" to a "present".
@@ -162,7 +195,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, command_pool: &CommandPool) -> FrameRenderer {
+    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
@@ -182,8 +215,47 @@ impl FrameRenderer {
                 .expect("Failed to create fence"));
         }
 
+        let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|index| {
+            HostMappedBuffer::create(device.clone(), physical_device, HostMappedBufferCreateInfo {
+                size: size_of::<TransformationMatrices>() as u64,
+                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            })
+        }).collect();
+
+        let descriptor_pool_size = vk::DescriptorPoolSize::builder()
+            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32);
+        let descriptor_pool_ci = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(std::slice::from_ref(&descriptor_pool_size))
+            .max_sets(MAX_FRAMES_IN_FLIGHT as u32);
+        let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_ci, None) }
+            .expect("Failed to create descriptor pool");
+
+        let set_layouts: Vec<vk::DescriptorSetLayout> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| pipeline.descriptor_set_layout).collect();
+        let descriptor_set_alloc_infos = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(set_layouts.as_slice());
+        let descriptor_sets = unsafe { device.allocate_descriptor_sets(&descriptor_set_alloc_infos) }
+            .expect("Failed to allocate descriptor sets");
+
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
+                .buffer(uniform_buffers[i].vk_buffer())
+                .offset(0)
+                .range(size_of::<TransformationMatrices>() as u64);
+            let write_descriptor_set = vk::WriteDescriptorSet::builder()
+                .dst_set(descriptor_sets[i])
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(std::slice::from_ref(&descriptor_buffer_info));
+            unsafe { device.update_descriptor_sets(std::slice::from_ref(&write_descriptor_set), &[]); }
+        }
+
         FrameRenderer {
             device,
+            uniform_buffers,
+            descriptor_pool,
+            descriptor_sets,
             command_buffers,
             image_available_semaphores,
             render_finished_semaphores,
@@ -199,6 +271,7 @@ impl Drop for FrameRenderer {
             self.image_available_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
             self.render_finished_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
             self.in_flight_fences.iter().for_each(|fence| self.device.destroy_fence(*fence, None));
+            self.device.destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 }

@@ -414,6 +414,7 @@ dependencies = [
  "glam",
  "glob",
  "image",
+ "lazy_static",
  "log",
  "memoffset 0.8.0",
  "once_cell",

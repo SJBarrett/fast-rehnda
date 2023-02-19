@@ -87,3 +87,46 @@ impl Buffer {
         }
     }
 }
+
+pub struct HostMappedBufferCreateInfo {
+    pub size: u64,
+    pub usage: vk::BufferUsageFlags,
+}
+
+pub struct HostMappedBuffer {
+    buffer: Buffer,
+    mapped_memory: *mut c_void,
+}
+
+impl HostMappedBuffer {
+    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: HostMappedBufferCreateInfo) -> HostMappedBuffer {
+        let buffer = Buffer::create_empty_buffer(device, physical_device, BufferCreateInfo {
+            size: create_info.size,
+            usage: create_info.usage,
+            memory_properties: vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+        });
+        let mapped_memory = unsafe { buffer.device.map_memory(buffer.memory, 0, create_info.size, vk::MemoryMapFlags::empty()) }
+            .expect("Failed to map memory");
+
+        HostMappedBuffer {
+            buffer,
+            mapped_memory,
+        }
+    }
+
+    pub fn write_data(&self, data: &[u8]) {
+        unsafe { self.mapped_memory.copy_from_nonoverlapping(data.as_ptr() as *const c_void, data.len()); }
+    }
+
+    pub fn vk_buffer(&self) -> vk::Buffer {
+        self.buffer.buffer
+    }
+}
+
+impl Drop for HostMappedBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            self.buffer.device.unmap_memory(self.buffer.memory);
+        }
+    }
+}

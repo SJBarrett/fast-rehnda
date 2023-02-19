@@ -39,7 +39,7 @@ impl EtnaEngine {
         );
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &command_pool);
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool);
         let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES);
 
 

@@ -7,6 +7,7 @@ use crate::model::Vertex;
 pub struct Model {
     pub vertex_buffer: etna::Buffer,
     pub index_buffer: etna::Buffer,
+    pub index_count: u32,
 }
 
 impl Model {
@@ -30,6 +31,7 @@ impl Model {
         Model {
             vertex_buffer,
             index_buffer,
+            index_count: indices.len() as u32,
         }
     }
 }

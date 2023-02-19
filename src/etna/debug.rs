@@ -69,10 +69,10 @@ unsafe extern "system" fn vulkan_debug_callback(
         return vk::FALSE
     }
     match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => debug!("[VkDebug][{}] {:?}", message_type, message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => info!("[VkDebug][{}] {:?}", message_type, message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => warn!("[VkDebug][{}] {:?}", message_type, message),
-        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => error!("[VkDebug][{}] {:?}", message_type, message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => debug!("[Vk-{}] {:?}", message_type, message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => info!("[Vk-{}] {:?}", message_type, message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => warn!("[Vk-{}] {:?}", message_type, message),
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => error!("[Vk-{}] {:?}", message_type, message),
         _ => {}
     }
 

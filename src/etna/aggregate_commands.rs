@@ -52,9 +52,8 @@ pub mod image_transitions {
                 .layer_count(1)
                 .build()
             );
-        let image_mem_barriers = &[image_memory_barrier.build()];
         let dep_info = vk::DependencyInfo::builder()
-            .image_memory_barriers(image_mem_barriers);
+            .image_memory_barriers(std::slice::from_ref(&image_memory_barrier));
         // make the transition to present happen
         unsafe { device.cmd_pipeline_barrier2(*command_buffer, &dep_info) };
     }
