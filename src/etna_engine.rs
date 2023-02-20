@@ -39,7 +39,9 @@ impl EtnaEngine {
         );
         let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
-        let model = Model::create_from_vertices_and_indices(device.clone(), &physical_device, &command_pool, &TRIANGLE_VERTICES, &TRIANGLE_INDICES, Path::new("assets/textures/texture.jpg"));
+
+        let model = Model::load_from_obj(device.clone(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
+
         let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, swapchain.extent, &model);
 
 

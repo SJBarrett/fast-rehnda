@@ -1,3 +1,4 @@
+
 use log::LevelFilter;
 use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
 use winit::event_loop::EventLoop;
