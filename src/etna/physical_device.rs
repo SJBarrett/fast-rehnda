@@ -13,11 +13,16 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
     khr::Synchronization2::name(),
 ];
 
+pub struct PhysicalDeviceCapabilities {
+    msaa_samples: vk::SampleCountFlags,
+}
+
 pub struct PhysicalDevice {
     instance: Arc<etna::Instance>,
     physical_device: vk::PhysicalDevice,
     pub device_properties: vk::PhysicalDeviceProperties,
     pub supported_features: vk::PhysicalDeviceFeatures,
+    pub capabilities: PhysicalDeviceCapabilities,
     queue_family_indices: QueueFamilyIndices,
 }
 
@@ -51,12 +56,37 @@ impl PhysicalDevice {
         let chosen_queue_family_indices = instance.find_queue_families(surface, picked_device);
         let device_properties = unsafe { instance.get_physical_device_properties(picked_device) };
         let supported_features = unsafe { instance.get_physical_device_features(picked_device) };
+        let capabilities = Self::determine_capabilities(&device_properties);
         PhysicalDevice {
             instance,
             physical_device: picked_device,
             device_properties,
             supported_features,
+            capabilities,
             queue_family_indices: chosen_queue_family_indices.unwrap(),
+        }
+    }
+
+    pub fn determine_capabilities(device_properties: &vk::PhysicalDeviceProperties) -> PhysicalDeviceCapabilities {
+        let counts = device_properties.limits.framebuffer_color_sample_counts & device_properties.limits.framebuffer_depth_sample_counts;
+        let msaa_samples = if counts.contains(vk::SampleCountFlags::TYPE_64) {
+            vk::SampleCountFlags::TYPE_64
+        } else if counts.contains(vk::SampleCountFlags::TYPE_32) {
+            vk::SampleCountFlags::TYPE_32
+        } else if counts.contains(vk::SampleCountFlags::TYPE_16) {
+            vk::SampleCountFlags::TYPE_16
+        } else if counts.contains(vk::SampleCountFlags::TYPE_8) {
+            vk::SampleCountFlags::TYPE_8
+        } else if counts.contains(vk::SampleCountFlags::TYPE_4) {
+            vk::SampleCountFlags::TYPE_4
+        } else if counts.contains(vk::SampleCountFlags::TYPE_2) {
+            vk::SampleCountFlags::TYPE_2
+        } else {
+            vk::SampleCountFlags::TYPE_1
+        };
+
+        PhysicalDeviceCapabilities {
+            msaa_samples,
         }
     }
 
