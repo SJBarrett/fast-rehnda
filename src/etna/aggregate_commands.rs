@@ -1,19 +1,25 @@
 pub mod image_transitions {
     use ash::vk;
+
     use crate::etna;
 
     pub struct TransitionProps {
         pub old_layout: vk::ImageLayout,
-        pub src_access_mask: vk::AccessFlags2,
-        pub src_stage_mask: vk::PipelineStageFlags2,
         pub new_layout: vk::ImageLayout,
-        pub dst_access_mask: vk::AccessFlags2,
+
+        pub src_stage_mask: vk::PipelineStageFlags2,
         pub dst_stage_mask: vk::PipelineStageFlags2,
+
+        pub src_access_mask: vk::AccessFlags2,
+        pub dst_access_mask: vk::AccessFlags2,
+
         pub aspect_mask: vk::ImageAspectFlags,
+        pub base_mip_level: u32,
+        pub level_count: u32,
     }
 
     impl TransitionProps {
-        pub const fn undefined_to_transfer_dst() -> TransitionProps {
+        pub const fn undefined_to_transfer_dst(mip_levels: u32) -> TransitionProps {
             TransitionProps {
                 old_layout: vk::ImageLayout::UNDEFINED,
                 src_access_mask: vk::AccessFlags2::empty(),
@@ -22,18 +28,8 @@ pub mod image_transitions {
                 dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
                 dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                 aspect_mask: vk::ImageAspectFlags::COLOR,
-            }
-        }
-
-        pub const fn transfer_dst_to_shader_read() -> TransitionProps {
-            TransitionProps {
-                old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
-                new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                dst_access_mask: vk::AccessFlags2::SHADER_READ,
-                dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-                aspect_mask: vk::ImageAspectFlags::COLOR,
+                level_count: mip_levels,
+                base_mip_level: 0,
             }
         }
     }
@@ -49,8 +45,8 @@ pub mod image_transitions {
             .image(image)
             .subresource_range(vk::ImageSubresourceRange::builder()
                 .aspect_mask(transition.aspect_mask)
-                .base_mip_level(0)
-                .level_count(1)
+                .base_mip_level(transition.base_mip_level)
+                .level_count(transition.level_count)
                 .base_array_layer(0)
                 .layer_count(1)
                 .build()

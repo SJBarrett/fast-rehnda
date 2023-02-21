@@ -6,7 +6,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::etna;
 use crate::etna::SwapchainError;
-use crate::model::{Model, TRIANGLE_INDICES, TRIANGLE_VERTICES};
+use crate::model::Model;
 
 pub struct EtnaEngine {
     // sync objects above here

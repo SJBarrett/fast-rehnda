@@ -4,23 +4,6 @@ use memoffset::offset_of;
 use crate::core::*;
 use bytemuck_derive::{Zeroable, Pod};
 
-pub const TRIANGLE_VERTICES: [Vertex; 8] = [
-    Vertex { position: Vec3::new(-0.5, -0.5, 0.0), color: ColorRgb::new(1.0, 0.0, 0.0), texture_coord: Vec2::new(1.0, 0.0) },
-    Vertex { position: Vec3::new(0.5, -0.5, 0.0), color: ColorRgb::new(0.0, 1.0, 0.0), texture_coord: Vec2::new(0.0, 0.0) },
-    Vertex { position: Vec3::new(0.5, 0.5, 0.0), color: ColorRgb::new(0.0, 0.0, 1.0), texture_coord: Vec2::new(0.0, 1.0) },
-    Vertex { position: Vec3::new(-0.5, 0.5, 0.0), color: ColorRgb::new(1.0, 1.0, 1.0), texture_coord: Vec2::new(1.0, 1.0) },
-    // second square
-    Vertex { position: Vec3::new(-0.5, -0.5, -0.5), color: ColorRgb::new(1.0, 0.0, 0.0), texture_coord: Vec2::new(1.0, 0.0) },
-    Vertex { position: Vec3::new(0.5, -0.5, -0.5), color: ColorRgb::new(0.0, 1.0, 0.0), texture_coord: Vec2::new(0.0, 0.0) },
-    Vertex { position: Vec3::new(0.5, 0.5, -0.5), color: ColorRgb::new(0.0, 0.0, 1.0), texture_coord: Vec2::new(0.0, 1.0) },
-    Vertex { position: Vec3::new(-0.5, 0.5, -0.5), color: ColorRgb::new(1.0, 1.0, 1.0), texture_coord: Vec2::new(1.0, 1.0) },
-];
-
-pub const TRIANGLE_INDICES: [u16; 12] = [
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4,
-];
-
 #[repr(C)]
 #[derive(Zeroable, Pod, Debug, Copy, Clone)]
 pub struct Vertex {

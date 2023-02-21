@@ -108,6 +108,8 @@ impl FrameRenderer {
             dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
             dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
             aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
         });
 
         let clear_color = vk::ClearValue {
@@ -185,6 +187,8 @@ impl FrameRenderer {
             dst_stage_mask: vk::PipelineStageFlags2::BOTTOM_OF_PIPE,
             dst_access_mask: vk::AccessFlags2::empty(),
             aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
         });
 
         unsafe { self.device.end_command_buffer(command_buffer) }

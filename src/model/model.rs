@@ -2,23 +2,21 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ash::vk;
-use log::info;
 
 use crate::core::{Vec2, Vec3};
-use crate::etna;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, Texture};
 use crate::model::Vertex;
 
 pub struct Model {
-    pub vertex_buffer: etna::Buffer,
-    pub index_buffer: etna::Buffer,
-    pub texture: etna::Texture,
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Buffer,
+    pub texture: Texture,
     pub index_count: u32,
 }
 
 impl Model {
     pub fn load_from_obj(device: Arc<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path, texture_path: &Path) -> Model {
-        let (models, materials) = tobj::load_obj(obj_path, &tobj::GPU_LOAD_OPTIONS)
+        let (models, _) = tobj::load_obj(obj_path, &tobj::GPU_LOAD_OPTIONS)
             .expect("Failed to load obj");
         if models.len() != 1 {
             panic!("Only expected 1 model in the obj file");
@@ -80,7 +78,7 @@ impl Model {
         vertex_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, buffer_data);
 
         let index_buffer_data: &[u8] = bytemuck::cast_slice(indices);
-        let mut index_buffer = etna::Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
+        let mut index_buffer = Buffer::create_empty_buffer(device.clone(), &physical_device, BufferCreateInfo {
             size: index_buffer_data.len() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,

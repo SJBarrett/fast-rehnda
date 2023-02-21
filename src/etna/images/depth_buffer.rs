@@ -22,6 +22,7 @@ impl DepthBuffer {
         let image = Image::create_image(device.clone(), physical_device, &ImageCreateInfo {
             width: extent.width,
             height: extent.height,
+            mip_levels: 1,
             format: depth_format,
             tiling: vk::ImageTiling::OPTIMAL,
             usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
@@ -42,6 +43,8 @@ impl DepthBuffer {
             } else {
                 vk::ImageAspectFlags::DEPTH
             },
+            base_mip_level: 0,
+            level_count: 1,
         });
 
         DepthBuffer {

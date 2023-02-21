@@ -1,5 +1,7 @@
 use std::sync::Arc;
+
 use ash::vk;
+
 use crate::etna::{Device, PhysicalDevice};
 
 pub struct Image {
@@ -7,6 +9,8 @@ pub struct Image {
     pub vk_image: vk::Image,
     pub device_memory: vk::DeviceMemory,
     pub image_view: vk::ImageView,
+    pub mip_levels: u32,
+    pub format: vk::Format,
 }
 
 impl Drop for Image {
@@ -25,6 +29,7 @@ pub struct ImageCreateInfo {
     pub format: vk::Format,
     pub tiling: vk::ImageTiling,
     pub usage: vk::ImageUsageFlags,
+    pub mip_levels: u32,
     pub memory_properties: vk::MemoryPropertyFlags,
     pub image_aspect_flags: vk::ImageAspectFlags,
 }
@@ -38,7 +43,7 @@ impl Image {
                 height: create_info.height,
                 depth: 1,
             })
-            .mip_levels(1)
+            .mip_levels(create_info.mip_levels)
             .array_layers(1)
             .format(create_info.format)
             .tiling(create_info.tiling)
@@ -67,7 +72,7 @@ impl Image {
             .subresource_range(vk::ImageSubresourceRange::builder()
                 .aspect_mask(create_info.image_aspect_flags)
                 .base_mip_level(0)
-                .level_count(1)
+                .level_count(create_info.mip_levels)
                 .base_array_layer(0)
                 .layer_count(1)
                 .build()
@@ -80,6 +85,8 @@ impl Image {
             vk_image: image,
             image_view,
             device_memory,
+            mip_levels: create_info.mip_levels,
+            format: create_info.format,
         }
     }
 }

@@ -82,6 +82,10 @@ impl PhysicalDevice {
         None
     }
 
+    pub fn get_format_properties(&self, format: vk::Format) -> vk::FormatProperties {
+        unsafe { self.instance.get_physical_device_format_properties(self.physical_device, format) }
+    }
+
     fn rate_device_suitability(instance: &etna::Instance, surface: &etna::Surface, physical_device: vk::PhysicalDevice) -> Option<usize> {
         let properties = unsafe { instance.get_physical_device_properties(physical_device) };
         let features = unsafe { instance.get_physical_device_features(physical_device) };
