@@ -14,7 +14,10 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
 ];
 
 pub struct PhysicalDeviceCapabilities {
-    msaa_samples: vk::SampleCountFlags,
+    // sample more than 1 will enable multisampling
+    pub msaa_samples: vk::SampleCountFlags,
+    // sample rate shading makes shaders be multi-sampled, not just geometry, but at a performance cost
+    pub sample_rate_shading_enabled: bool,
 }
 
 pub struct PhysicalDevice {
@@ -87,6 +90,7 @@ impl PhysicalDevice {
 
         PhysicalDeviceCapabilities {
             msaa_samples,
+            sample_rate_shading_enabled: false,
         }
     }
 

@@ -37,12 +37,12 @@ impl EtnaEngine {
             &physical_device.queue_families(),
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
-        let pipeline = etna::Pipeline::new(device.clone(), &swapchain);
+        let pipeline = etna::Pipeline::new(device.clone(),  &physical_device.capabilities, &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
 
         let model = Model::load_from_obj(device.clone(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
 
-        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, swapchain.extent, &model);
+        let frame_renderer = etna::FrameRenderer::create(device.clone(), &physical_device, &pipeline, &command_pool, &swapchain, &model);
 
 
         EtnaEngine {
@@ -78,7 +78,7 @@ impl EtnaEngine {
                     &self.physical_device.queue_families(),
                     self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
                 );
-                self.frame_renderer.resize(&self.physical_device, &self.command_pool, self.swapchain.extent);
+                self.frame_renderer.resize(&self.physical_device, &self.command_pool, &self.swapchain);
             }
         }
     }

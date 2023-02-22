@@ -5,8 +5,8 @@ use winit::event_loop::EventLoop;
 use crate::etna_engine::EtnaEngine;
 
 const WINDOW_TITLE: &str = "Fast Rehnda";
-const WINDOW_WIDTH: u32 = 800;
-const WINDOW_HEIGHT: u32 = 600;
+const WINDOW_WIDTH: u32 = 1600;
+const WINDOW_HEIGHT: u32 = 1200;
 
 pub struct Application {
     _window: Arc<winit::window::Window>,

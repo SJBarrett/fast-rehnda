@@ -32,6 +32,7 @@ pub struct ImageCreateInfo {
     pub mip_levels: u32,
     pub memory_properties: vk::MemoryPropertyFlags,
     pub image_aspect_flags: vk::ImageAspectFlags,
+    pub num_samples: vk::SampleCountFlags,
 }
 
 impl Image {
@@ -50,7 +51,7 @@ impl Image {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(create_info.usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .samples(vk::SampleCountFlags::TYPE_1)
+            .samples(create_info.num_samples)
             ;
 
         let image = unsafe { device.create_image(&image_ci, None) }

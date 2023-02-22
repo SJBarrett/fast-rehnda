@@ -47,6 +47,7 @@ impl Device {
             .build();
         let physical_device_features = vk::PhysicalDeviceFeatures::builder()
             .sampler_anisotropy(physical_device.supported_features.sampler_anisotropy == vk::TRUE)
+            .sample_rate_shading(physical_device.capabilities.sample_rate_shading_enabled)
             ;
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(queue_create_infos.as_slice())

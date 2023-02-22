@@ -40,6 +40,7 @@ impl Texture {
             usage: vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
             image_aspect_flags: vk::ImageAspectFlags::COLOR,
+            num_samples: vk::SampleCountFlags::TYPE_1,
         });
 
 

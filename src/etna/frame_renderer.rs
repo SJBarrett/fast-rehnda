@@ -5,7 +5,7 @@ use ash::vk;
 use lazy_static::lazy_static;
 use crate::core::{Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, DepthBuffer, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Pipeline, SwapchainResult};
+use crate::etna::{CommandPool, DepthBuffer, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
 use crate::model::{Model, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -17,6 +17,7 @@ pub struct FrameRenderer {
     device: Arc<etna::Device>,
     descriptor_pool: vk::DescriptorPool,
     depth_buffer: DepthBuffer,
+    color_image: Image,
     descriptor_sets: Vec<vk::DescriptorSet>,
     command_buffers: Vec<vk::CommandBuffer>,
     // sync objects
@@ -28,8 +29,9 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
-    pub fn resize(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &CommandPool,  new_size: vk::Extent2D) {
-        self.depth_buffer = DepthBuffer::create(self.device.clone(), physical_device, command_pool, new_size);
+    pub fn resize(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain) {
+        self.depth_buffer = DepthBuffer::create(self.device.clone(), physical_device, command_pool, swapchain.extent);
+        self.color_image = Image::create_image(self.device.clone(), physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
     }
 
     pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &Pipeline, model: &Model) -> SwapchainResult<()> {
@@ -119,11 +121,15 @@ impl FrameRenderer {
         };
 
         let color_attachment_info = vk::RenderingAttachmentInfo::builder()
-            .image_view(swapchain.image_views()[image_index as usize])
-            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(clear_color);
+                .image_view(self.color_image.image_view)
+                .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .resolve_mode(vk::ResolveModeFlags::AVERAGE)
+                .resolve_image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+                .resolve_image_view(swapchain.image_views[image_index as usize])
+                .clear_value(clear_color);
+
         let depth_attachment_info = vk::RenderingAttachmentInfo::builder()
             .image_view(self.depth_buffer.image.image_view)
             .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
@@ -214,7 +220,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, extent: vk::Extent2D, model: &Model) -> FrameRenderer {
+    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
@@ -290,11 +296,13 @@ impl FrameRenderer {
             unsafe { device.update_descriptor_sets(write_sets, &[]); }
         }
 
-        let depth_buffer = DepthBuffer::create(device.clone(), physical_device, command_pool, extent);
+        let depth_buffer = DepthBuffer::create(device.clone(), physical_device, command_pool, swapchain.extent);
+        let color_image = Image::create_image(device.clone(), physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
         FrameRenderer {
             device,
             uniform_buffers,
             depth_buffer,
+            color_image,
             descriptor_pool,
             descriptor_sets,
             command_buffers,
@@ -302,6 +310,20 @@ impl FrameRenderer {
             render_finished_semaphores,
             in_flight_fences,
             current_frame: 0,
+        }
+    }
+
+    fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, swapchain: &Swapchain) -> ImageCreateInfo {
+        ImageCreateInfo {
+            width: swapchain.extent.width,
+            height: swapchain.extent.height,
+            format: swapchain.image_format,
+            tiling: vk::ImageTiling::OPTIMAL,
+            usage: vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            mip_levels: 1,
+            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            image_aspect_flags: vk::ImageAspectFlags::COLOR,
+            num_samples: physical_device.capabilities.msaa_samples,
         }
     }
 }
