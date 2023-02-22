@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 use crate::etna;
+use crate::etna::{GraphicsSettings, MsaaSamples};
 use crate::etna::utility::vk_cstr_to_string;
 
 pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
@@ -13,19 +14,12 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
     khr::Synchronization2::name(),
 ];
 
-pub struct PhysicalDeviceCapabilities {
-    // sample more than 1 will enable multisampling
-    pub msaa_samples: vk::SampleCountFlags,
-    // sample rate shading makes shaders be multi-sampled, not just geometry, but at a performance cost
-    pub sample_rate_shading_enabled: bool,
-}
-
 pub struct PhysicalDevice {
     instance: Arc<etna::Instance>,
     physical_device: vk::PhysicalDevice,
     pub device_properties: vk::PhysicalDeviceProperties,
     pub supported_features: vk::PhysicalDeviceFeatures,
-    pub capabilities: PhysicalDeviceCapabilities,
+    pub graphics_settings: GraphicsSettings,
     queue_family_indices: QueueFamilyIndices,
 }
 
@@ -59,36 +53,36 @@ impl PhysicalDevice {
         let chosen_queue_family_indices = instance.find_queue_families(surface, picked_device);
         let device_properties = unsafe { instance.get_physical_device_properties(picked_device) };
         let supported_features = unsafe { instance.get_physical_device_features(picked_device) };
-        let capabilities = Self::determine_capabilities(&device_properties);
+        let graphical_settings = Self::determine_graphical_settings(&device_properties);
         PhysicalDevice {
             instance,
             physical_device: picked_device,
             device_properties,
             supported_features,
-            capabilities,
+            graphics_settings: graphical_settings,
             queue_family_indices: chosen_queue_family_indices.unwrap(),
         }
     }
 
-    pub fn determine_capabilities(device_properties: &vk::PhysicalDeviceProperties) -> PhysicalDeviceCapabilities {
+    pub fn determine_graphical_settings(device_properties: &vk::PhysicalDeviceProperties) -> GraphicsSettings {
         let counts = device_properties.limits.framebuffer_color_sample_counts & device_properties.limits.framebuffer_depth_sample_counts;
         let msaa_samples = if counts.contains(vk::SampleCountFlags::TYPE_64) {
-            vk::SampleCountFlags::TYPE_64
+            MsaaSamples::X64
         } else if counts.contains(vk::SampleCountFlags::TYPE_32) {
-            vk::SampleCountFlags::TYPE_32
+            MsaaSamples::X32
         } else if counts.contains(vk::SampleCountFlags::TYPE_16) {
-            vk::SampleCountFlags::TYPE_16
+            MsaaSamples::X16
         } else if counts.contains(vk::SampleCountFlags::TYPE_8) {
-            vk::SampleCountFlags::TYPE_8
+            MsaaSamples::X8
         } else if counts.contains(vk::SampleCountFlags::TYPE_4) {
-            vk::SampleCountFlags::TYPE_4
+            MsaaSamples::X4
         } else if counts.contains(vk::SampleCountFlags::TYPE_2) {
-            vk::SampleCountFlags::TYPE_2
+            MsaaSamples::X2
         } else {
-            vk::SampleCountFlags::TYPE_1
+            MsaaSamples::X1
         };
 
-        PhysicalDeviceCapabilities {
+        GraphicsSettings {
             msaa_samples,
             sample_rate_shading_enabled: false,
         }

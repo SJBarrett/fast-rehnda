@@ -29,6 +29,7 @@ impl EtnaEngine {
         let instance = Arc::new(etna::Instance::new(&entry));
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
         let physical_device = etna::PhysicalDevice::pick_physical_device(instance.clone(), &surface);
+        info!("Graphics Settings: {:?}", physical_device.graphics_settings);
         let device = Arc::new(etna::Device::create(&instance, &surface, &physical_device));
         let swapchain = etna::Swapchain::create(
             &instance,
@@ -37,7 +38,7 @@ impl EtnaEngine {
             &physical_device.queue_families(),
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
-        let pipeline = etna::Pipeline::new(device.clone(),  &physical_device.capabilities, &swapchain);
+        let pipeline = etna::Pipeline::new(device.clone(),  &physical_device.graphics_settings, &swapchain);
         let command_pool = etna::CommandPool::create(device.clone(), physical_device.queue_families().graphics_family);
 
         let model = Model::load_from_obj(device.clone(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
@@ -56,7 +57,7 @@ impl EtnaEngine {
             pipeline,
             frame_renderer,
             model,
-            command_pool: command_pool,
+            command_pool,
         }
     }
 

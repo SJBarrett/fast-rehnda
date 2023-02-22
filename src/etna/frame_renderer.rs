@@ -5,7 +5,7 @@ use ash::vk;
 use lazy_static::lazy_static;
 use crate::core::{Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, DepthBuffer, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
+use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
 use crate::model::{Model, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -15,6 +15,7 @@ lazy_static! {
 
 pub struct FrameRenderer {
     device: Arc<etna::Device>,
+    graphics_settings: GraphicsSettings,
     descriptor_pool: vk::DescriptorPool,
     depth_buffer: DepthBuffer,
     color_image: Image,
@@ -120,7 +121,8 @@ impl FrameRenderer {
             }
         };
 
-        let color_attachment_info = vk::RenderingAttachmentInfo::builder()
+        let color_attachment_info = if self.graphics_settings.is_msaa_enabled() {
+            vk::RenderingAttachmentInfo::builder()
                 .image_view(self.color_image.image_view)
                 .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -128,7 +130,16 @@ impl FrameRenderer {
                 .resolve_mode(vk::ResolveModeFlags::AVERAGE)
                 .resolve_image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
                 .resolve_image_view(swapchain.image_views[image_index as usize])
-                .clear_value(clear_color);
+                .clear_value(clear_color)
+        } else {
+            vk::RenderingAttachmentInfo::builder()
+                .image_view(swapchain.image_views[image_index as usize])
+                .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .resolve_mode(vk::ResolveModeFlags::NONE)
+                .clear_value(clear_color)
+        };
 
         let depth_attachment_info = vk::RenderingAttachmentInfo::builder()
             .image_view(self.depth_buffer.image.image_view)
@@ -300,6 +311,7 @@ impl FrameRenderer {
         let color_image = Image::create_image(device.clone(), physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
         FrameRenderer {
             device,
+            graphics_settings: physical_device.graphics_settings,
             uniform_buffers,
             depth_buffer,
             color_image,
@@ -323,7 +335,7 @@ impl FrameRenderer {
             mip_levels: 1,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
             image_aspect_flags: vk::ImageAspectFlags::COLOR,
-            num_samples: physical_device.capabilities.msaa_samples,
+            num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
         }
     }
 }

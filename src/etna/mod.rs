@@ -6,6 +6,8 @@ mod device;
 pub use device::*;
 mod frame_renderer;
 pub use frame_renderer::*;
+mod graphical_settings;
+pub use graphical_settings::*;
 mod instance;
 pub use instance::*;
 mod physical_device;

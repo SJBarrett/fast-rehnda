@@ -28,7 +28,7 @@ impl DepthBuffer {
             usage: vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
             image_aspect_flags: vk::ImageAspectFlags::DEPTH,
-            num_samples: physical_device.capabilities.msaa_samples,
+            num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
         });
 
         let one_time_command_buffer = command_pool.one_time_command_buffer();

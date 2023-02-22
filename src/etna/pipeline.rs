@@ -24,7 +24,7 @@ impl Drop for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(device: Arc<etna::Device>, physical_device_capabilities: &etna::PhysicalDeviceCapabilities, swapchain: &etna::Swapchain) -> Pipeline {
+    pub fn new(device: Arc<etna::Device>, graphics_settings: &etna::GraphicsSettings, swapchain: &etna::Swapchain) -> Pipeline {
         let transformation_matrices_layout_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -105,9 +105,9 @@ impl Pipeline {
             .depth_bias_slope_factor(0.0);
 
         let multisample_state_ci = vk::PipelineMultisampleStateCreateInfo::builder()
-            .sample_shading_enable(physical_device_capabilities.sample_rate_shading_enabled)
-            .rasterization_samples(physical_device_capabilities.msaa_samples)
-            .min_sample_shading(if physical_device_capabilities.sample_rate_shading_enabled { 0.2 } else { 1.0 }) // closer to 1 is smoother
+            .rasterization_samples(graphics_settings.msaa_samples.to_sample_count_flags())
+            .sample_shading_enable(graphics_settings.sample_rate_shading_enabled)
+            .min_sample_shading(if graphics_settings.sample_rate_shading_enabled { 0.2 } else { 1.0 }) // closer to 1 is smoother
             .alpha_to_coverage_enable(false)
             .alpha_to_one_enable(false);
 
