@@ -43,20 +43,18 @@ impl Model {
             indices = model.mesh.indices.iter().map(|&index| index as u16).collect();
         }
         let vertex_data: &[u8] = bytemuck::cast_slice(vertices.as_slice());
-        let mut vertex_buffer = Buffer::create_empty_buffer(device, physical_device, BufferCreateInfo {
-            size: vertex_data.len() as u64,
+        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, physical_device, command_pool, BufferCreateInfo {
+            data: vertex_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
-        vertex_buffer.populate_buffer_using_staging_buffer(physical_device, command_pool, vertex_data);
 
         let index_buffer_data: &[u8] = bytemuck::cast_slice(indices.as_slice());
-        let mut index_buffer = Buffer::create_empty_buffer(device, physical_device, BufferCreateInfo {
-            size: index_buffer_data.len() as u64,
+        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, physical_device, command_pool, BufferCreateInfo {
+            data: index_buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
-        index_buffer.populate_buffer_using_staging_buffer(physical_device, command_pool, index_buffer_data);
 
         let texture = Texture::create(device, physical_device, command_pool, texture_path);
         Model {
@@ -69,20 +67,18 @@ impl Model {
 
     pub fn create_from_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, vertices: &[Vertex], indices: &[u16], texture_path: &Path) -> Model {
         let buffer_data: &[u8] = bytemuck::cast_slice(vertices);
-        let mut vertex_buffer = Buffer::create_empty_buffer(device, &physical_device, BufferCreateInfo {
-            size: buffer_data.len() as u64,
+        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, &physical_device, command_pool, BufferCreateInfo {
+            data: buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
-        vertex_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, buffer_data);
 
         let index_buffer_data: &[u8] = bytemuck::cast_slice(indices);
-        let mut index_buffer = Buffer::create_empty_buffer(device, &physical_device, BufferCreateInfo {
-            size: index_buffer_data.len() as u64,
+        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, &physical_device, command_pool, BufferCreateInfo {
+            data: index_buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
-        index_buffer.populate_buffer_using_staging_buffer(&physical_device, &command_pool, index_buffer_data);
 
         let texture = Texture::create(device, physical_device, command_pool, texture_path);
 

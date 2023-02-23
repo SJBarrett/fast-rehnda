@@ -26,10 +26,10 @@ impl Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
         let src_buffer = Buffer::create_buffer_with_data(device, physical_device, BufferCreateInfo {
-            size: rgba_img.as_bytes().len() as u64,
+            data: rgba_img.as_bytes(),
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_properties: vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        }, rgba_img.as_bytes());
+        });
         let mip_levels = (rgba_img.width().max(rgba_img.height())).ilog2() + 1;
         let image = Image::create_image(device, physical_device, &ImageCreateInfo {
             width: rgba_img.width(),

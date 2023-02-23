@@ -21,31 +21,38 @@ impl Drop for Buffer {
     }
 }
 
-pub struct BufferCreateInfo {
-    pub size: u64,
+pub struct BufferCreateInfo<'a> {
+    pub data: &'a[u8],
     pub usage: vk::BufferUsageFlags,
     pub memory_properties: vk::MemoryPropertyFlags,
 }
 
 impl Buffer {
-    pub fn create_buffer_with_data(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo, data: &[u8]) -> Buffer {
-        assert_eq!(create_info.size, data.len() as u64);
-        let empty_buffer = Self::create_empty_buffer(device, physical_device, create_info);
+    pub fn create_buffer_with_data(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo) -> Buffer {
+        let empty_buffer = Self::create_empty_buffer(device, physical_device, create_info.data.len() as u64, create_info.usage, create_info.memory_properties);
 
         let mapped_memory = unsafe { empty_buffer.device.map_memory(empty_buffer.memory, 0, empty_buffer.size, vk::MemoryMapFlags::empty()) }
             .expect("Failed to map memory");
-        unsafe { mapped_memory.copy_from_nonoverlapping(data.as_ptr() as *const c_void, data.len()); }
+        unsafe { mapped_memory.copy_from_nonoverlapping(create_info.data.as_ptr() as *const c_void, create_info.data.len()); }
         unsafe { empty_buffer.device.unmap_memory(empty_buffer.memory); }
 
         empty_buffer
     }
 
-    pub fn populate_buffer_using_staging_buffer(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &etna::CommandPool, data: &[u8]) {
-        let staging_buffer = Self::create_empty_buffer(self.device, physical_device, BufferCreateInfo {
-            size: self.size,
-            usage: vk::BufferUsageFlags::TRANSFER_SRC,
-            memory_properties: vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        });
+    pub fn create_and_initialize_buffer_with_staging_buffer(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, command_pool: &etna::CommandPool, create_info: BufferCreateInfo) -> Buffer {
+        let mut buffer = Self::create_empty_buffer(device, physical_device, create_info.data.len() as u64, create_info.usage, create_info.memory_properties);
+        buffer.populate_buffer_using_staging_buffer(physical_device, command_pool, create_info.data);
+        buffer
+    }
+
+    fn populate_buffer_using_staging_buffer(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &etna::CommandPool, data: &[u8]) {
+        let staging_buffer = Self::create_empty_buffer(
+            self.device,
+            physical_device,
+            self.size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE
+        );
 
         let staging_buffer_memory = unsafe { self.device.map_memory(staging_buffer.memory, 0, self.size, vk::MemoryMapFlags::empty()) }
             .expect("Failed to map memory");
@@ -60,19 +67,18 @@ impl Buffer {
                 .build()
         ];
         unsafe { self.device.cmd_copy_buffer(*command_buffer, staging_buffer.buffer, self.buffer, &copy_region); }
-
     }
 
-    pub fn create_empty_buffer(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo) -> Buffer {
+    fn create_empty_buffer(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, size: u64, usage: vk::BufferUsageFlags, memory_properties: vk::MemoryPropertyFlags) -> Buffer {
         let buffer_ci = vk::BufferCreateInfo::builder()
-            .size(create_info.size)
-            .usage(create_info.usage)
+            .size(size)
+            .usage(usage)
             .sharing_mode(vk::SharingMode::EXCLUSIVE); // expected only to be used by a single queue
         let buffer = unsafe { device.create_buffer(&buffer_ci, None) }
             .expect("Failed to create buffer");
 
         let memory_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
-        let memory_type_index = physical_device.find_memory_type(memory_requirements.memory_type_bits, create_info.memory_properties);
+        let memory_type_index = physical_device.find_memory_type(memory_requirements.memory_type_bits, memory_properties);
         let allocate_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(memory_requirements.size)
             .memory_type_index(memory_type_index);
@@ -83,7 +89,7 @@ impl Buffer {
             .expect("Failed to bind buffer memory");
         Buffer {
             device,
-            size: create_info.size,
+            size,
             buffer,
             memory,
         }
@@ -102,11 +108,13 @@ pub struct HostMappedBuffer {
 
 impl HostMappedBuffer {
     pub fn create(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: HostMappedBufferCreateInfo) -> HostMappedBuffer {
-        let buffer = Buffer::create_empty_buffer(device, physical_device, BufferCreateInfo {
-            size: create_info.size,
-            usage: create_info.usage,
-            memory_properties: vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        });
+        let buffer = Buffer::create_empty_buffer(
+            device,
+            physical_device,
+            create_info.size,
+            create_info.usage,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE
+        );
         let mapped_memory = unsafe { buffer.device.map_memory(buffer.memory, 0, create_info.size, vk::MemoryMapFlags::empty()) }
             .expect("Failed to map memory");
 
