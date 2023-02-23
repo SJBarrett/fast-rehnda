@@ -6,7 +6,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use crate::core::LongLivedObject;
 
 use crate::etna;
-use crate::etna::SwapchainError;
+use crate::etna::{pipelines, SwapchainError};
 use crate::model::Model;
 
 pub struct EtnaEngine {
@@ -39,7 +39,7 @@ impl EtnaEngine {
             &physical_device.queue_families(),
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
-        let pipeline = etna::Pipeline::new(device.ptr(),  &physical_device.graphics_settings, &swapchain);
+        let pipeline = pipelines::basic_pipeline(device.ptr(),  &physical_device.graphics_settings, &swapchain);
         let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
 
         let model = Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
