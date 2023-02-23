@@ -1,15 +1,17 @@
 use std::ops::Deref;
-use std::sync::Arc;
+
 use ash::vk;
+
+use crate::core::ConstPtr;
 use crate::etna;
 
 pub struct CommandPool {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     command_pool: vk::CommandPool,
 }
 
 impl CommandPool {
-    pub fn create(device: Arc<etna::Device>, queue_family_index: u32) -> CommandPool {
+    pub fn create(device: ConstPtr<etna::Device>, queue_family_index: u32) -> CommandPool {
         let command_pool_ci = vk::CommandPoolCreateInfo::builder()
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
             .queue_family_index(queue_family_index);
@@ -32,7 +34,7 @@ impl CommandPool {
     }
 
     pub fn one_time_command_buffer(&self) -> OneTimeCommandBuffer {
-        OneTimeCommandBuffer::start(self.device.clone(), self.command_pool)
+        OneTimeCommandBuffer::start(self.device, self.command_pool)
     }
 }
 
@@ -45,7 +47,7 @@ impl Drop for CommandPool {
 }
 
 pub struct OneTimeCommandBuffer {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     command_buffer: vk::CommandBuffer,
     owning_command_pool: vk::CommandPool,
 }
@@ -59,7 +61,7 @@ impl Deref for OneTimeCommandBuffer {
 }
 
 impl OneTimeCommandBuffer {
-    fn start(device: Arc<etna::Device>, owning_command_pool: vk::CommandPool) -> OneTimeCommandBuffer {
+    fn start(device: ConstPtr<etna::Device>, owning_command_pool: vk::CommandPool) -> OneTimeCommandBuffer {
         let alloc_info = vk::CommandBufferAllocateInfo::builder()
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_pool(owning_command_pool)

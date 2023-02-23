@@ -1,6 +1,7 @@
-use std::sync::Arc;
 use ash::vk;
 use ash::vk::Extent2D;
+
+use crate::core::ConstPtr;
 use crate::etna::{CommandPool, Device, Image, ImageCreateInfo, PhysicalDevice};
 use crate::etna::image_transitions::{transition_image_layout, TransitionProps};
 
@@ -15,11 +16,11 @@ impl Drop for DepthBuffer {
 }
 
 impl DepthBuffer {
-    pub fn create(device: Arc<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, extent: Extent2D) -> DepthBuffer {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, extent: Extent2D) -> DepthBuffer {
         let candidate_formats = [vk::Format::D32_SFLOAT, vk::Format::D32_SFLOAT_S8_UINT, vk::Format::D24_UNORM_S8_UINT];
         let depth_format = physical_device.find_supported_format(&candidate_formats, vk::ImageTiling::OPTIMAL, vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             .expect("Failed to find supported format for depth buffer");
-        let image = Image::create_image(device.clone(), physical_device, &ImageCreateInfo {
+        let image = Image::create_image(device, physical_device, &ImageCreateInfo {
             width: extent.width,
             height: extent.height,
             mip_levels: 1,

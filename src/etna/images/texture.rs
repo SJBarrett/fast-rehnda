@@ -1,14 +1,14 @@
 use std::path::Path;
-use std::sync::Arc;
 
 use ash::vk;
 use image::EncodableLayout;
 
+use crate::core::ConstPtr;
 use crate::etna;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Image, image_transitions, ImageCreateInfo, PhysicalDevice};
 
 pub struct Texture {
-    device: Arc<Device>,
+    device: ConstPtr<Device>,
     pub image: Image,
     pub sampler: vk::Sampler,
 }
@@ -22,16 +22,16 @@ impl Drop for Texture {
 }
 
 impl Texture {
-    pub fn create(device: Arc<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path) -> Texture {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path) -> Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
-        let src_buffer = Buffer::create_buffer_with_data(device.clone(), physical_device, BufferCreateInfo {
+        let src_buffer = Buffer::create_buffer_with_data(device, physical_device, BufferCreateInfo {
             size: rgba_img.as_bytes().len() as u64,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_properties: vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         }, rgba_img.as_bytes());
         let mip_levels = (rgba_img.width().max(rgba_img.height())).ilog2() + 1;
-        let image = Image::create_image(device.clone(), physical_device, &ImageCreateInfo {
+        let image = Image::create_image(device, physical_device, &ImageCreateInfo {
             width: rgba_img.width(),
             height: rgba_img.height(),
             mip_levels,

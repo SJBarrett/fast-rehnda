@@ -1,13 +1,15 @@
 use std::ffi::CString;
 use std::path::Path;
-use std::sync::Arc;
+
 use ash::vk;
-use crate::{etna};
+
+use crate::etna;
+use crate::core::ConstPtr;
 use crate::etna::shader::load_shader_module_from_file;
 use crate::model::Vertex;
 
 pub struct Pipeline {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
@@ -24,7 +26,7 @@ impl Drop for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(device: Arc<etna::Device>, graphics_settings: &etna::GraphicsSettings, swapchain: &etna::Swapchain) -> Pipeline {
+    pub fn new(device: ConstPtr<etna::Device>, graphics_settings: &etna::GraphicsSettings, swapchain: &etna::Swapchain) -> Pipeline {
         let transformation_matrices_layout_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)

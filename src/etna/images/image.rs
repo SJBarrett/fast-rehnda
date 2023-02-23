@@ -1,11 +1,10 @@
-use std::sync::Arc;
-
 use ash::vk;
 
+use crate::core::ConstPtr;
 use crate::etna::{Device, PhysicalDevice};
 
 pub struct Image {
-    device: Arc<Device>,
+    device: ConstPtr<Device>,
     pub vk_image: vk::Image,
     pub device_memory: vk::DeviceMemory,
     pub image_view: vk::ImageView,
@@ -36,7 +35,7 @@ pub struct ImageCreateInfo {
 }
 
 impl Image {
-    pub fn create_image(device: Arc<Device>, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> Image {
+    pub fn create_image(device: ConstPtr<Device>, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> Image {
         let image_ci = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(vk::Extent3D {

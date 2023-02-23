@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::ops::Deref;
-use std::sync::Arc;
+
 use ash::extensions::khr;
 use ash::vk;
+
+use crate::core::ConstPtr;
 use crate::etna;
 use crate::etna::{GraphicsSettings, MsaaSamples};
 use crate::etna::utility::vk_cstr_to_string;
@@ -15,7 +17,7 @@ pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
 ];
 
 pub struct PhysicalDevice {
-    instance: Arc<etna::Instance>,
+    instance: ConstPtr<etna::Instance>,
     physical_device: vk::PhysicalDevice,
     pub device_properties: vk::PhysicalDeviceProperties,
     pub supported_features: vk::PhysicalDeviceFeatures,
@@ -40,7 +42,7 @@ impl PhysicalDevice {
         self.queue_family_indices
     }
 
-    pub fn pick_physical_device(instance: Arc<etna::Instance>, surface: &etna::Surface) -> PhysicalDevice {
+    pub fn pick_physical_device(instance: ConstPtr<etna::Instance>, surface: &etna::Surface) -> PhysicalDevice {
         let physical_devices = unsafe { instance.enumerate_physical_devices() }
             .expect("Couldn't enumerate physical devices");
         if physical_devices.is_empty() {

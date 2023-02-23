@@ -1,10 +1,12 @@
 use std::os::raw::c_void;
-use std::sync::Arc;
+
 use ash::vk;
+
+use crate::core::ConstPtr;
 use crate::etna;
 
 pub struct Buffer {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     pub size: u64,
     pub buffer: vk::Buffer,
     pub memory: vk::DeviceMemory,
@@ -26,7 +28,7 @@ pub struct BufferCreateInfo {
 }
 
 impl Buffer {
-    pub fn create_buffer_with_data(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo, data: &[u8]) -> Buffer {
+    pub fn create_buffer_with_data(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo, data: &[u8]) -> Buffer {
         assert_eq!(create_info.size, data.len() as u64);
         let empty_buffer = Self::create_empty_buffer(device, physical_device, create_info);
 
@@ -39,7 +41,7 @@ impl Buffer {
     }
 
     pub fn populate_buffer_using_staging_buffer(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &etna::CommandPool, data: &[u8]) {
-        let staging_buffer = Self::create_empty_buffer(self.device.clone(), physical_device, BufferCreateInfo {
+        let staging_buffer = Self::create_empty_buffer(self.device, physical_device, BufferCreateInfo {
             size: self.size,
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
             memory_properties: vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
@@ -61,7 +63,7 @@ impl Buffer {
 
     }
 
-    pub fn create_empty_buffer(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo) -> Buffer {
+    pub fn create_empty_buffer(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: BufferCreateInfo) -> Buffer {
         let buffer_ci = vk::BufferCreateInfo::builder()
             .size(create_info.size)
             .usage(create_info.usage)
@@ -99,7 +101,7 @@ pub struct HostMappedBuffer {
 }
 
 impl HostMappedBuffer {
-    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: HostMappedBufferCreateInfo) -> HostMappedBuffer {
+    pub fn create(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, create_info: HostMappedBufferCreateInfo) -> HostMappedBuffer {
         let buffer = Buffer::create_empty_buffer(device, physical_device, BufferCreateInfo {
             size: create_info.size,
             usage: create_info.usage,

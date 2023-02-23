@@ -1,9 +1,10 @@
 use std::mem::size_of;
-use std::sync::Arc;
 use std::time::Instant;
+
 use ash::vk;
 use lazy_static::lazy_static;
-use crate::core::{Mat4, Vec3};
+
+use crate::core::{ConstPtr, Mat4, Vec3};
 use crate::etna;
 use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
 use crate::model::{Model, TransformationMatrices};
@@ -14,7 +15,7 @@ lazy_static! {
 }
 
 pub struct FrameRenderer {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     graphics_settings: GraphicsSettings,
     descriptor_pool: vk::DescriptorPool,
     depth_buffer: DepthBuffer,
@@ -31,8 +32,8 @@ pub struct FrameRenderer {
 
 impl FrameRenderer {
     pub fn resize(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain) {
-        self.depth_buffer = DepthBuffer::create(self.device.clone(), physical_device, command_pool, swapchain.extent);
-        self.color_image = Image::create_image(self.device.clone(), physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
+        self.depth_buffer = DepthBuffer::create(self.device, physical_device, command_pool, swapchain.extent);
+        self.color_image = Image::create_image(self.device, physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
     }
 
     pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &Pipeline, model: &Model) -> SwapchainResult<()> {
@@ -231,7 +232,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: Arc<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
+    pub fn create(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
@@ -252,7 +253,7 @@ impl FrameRenderer {
         }
 
         let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| {
-            HostMappedBuffer::create(device.clone(), physical_device, HostMappedBufferCreateInfo {
+            HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
                 size: size_of::<TransformationMatrices>() as u64,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             })
@@ -307,8 +308,8 @@ impl FrameRenderer {
             unsafe { device.update_descriptor_sets(write_sets, &[]); }
         }
 
-        let depth_buffer = DepthBuffer::create(device.clone(), physical_device, command_pool, swapchain.extent);
-        let color_image = Image::create_image(device.clone(), physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
+        let depth_buffer = DepthBuffer::create(device, physical_device, command_pool, swapchain.extent);
+        let color_image = Image::create_image(device, physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
         FrameRenderer {
             device,
             graphics_settings: physical_device.graphics_settings,

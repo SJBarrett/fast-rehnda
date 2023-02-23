@@ -1,12 +1,13 @@
-use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 use log::debug;
+
+use crate::core::ConstPtr;
 use crate::etna;
 use crate::etna::{ChosenSwapchainProps, QueueFamilyIndices};
 
 pub struct Swapchain {
-    device: Arc<etna::Device>,
+    device: ConstPtr<etna::Device>,
     swapchain: vk::SwapchainKHR,
     swapchain_fn: khr::Swapchain,
     pub image_format: vk::Format,
@@ -49,10 +50,6 @@ impl Swapchain {
     pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
-
-    pub fn image_views(&self) -> &Vec<vk::ImageView> {
-        &self.image_views
-    }
 }
 
 // intialisation functionality
@@ -71,7 +68,7 @@ impl Swapchain {
         self.images = images;
         self.image_views = image_views;
     }
-    pub fn create(instance: &ash::Instance, device: Arc<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
+    pub fn create(instance: &ash::Instance, device: ConstPtr<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
         let swapchain_fn = khr::Swapchain::new(instance, &device);
 
         let image_format = chosen_swapchain_props.surface_format.format;
