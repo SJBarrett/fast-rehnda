@@ -2,7 +2,8 @@ use std::ffi::CString;
 use std::path::Path;
 use ash::vk;
 use crate::core::ConstPtr;
-use crate::etna::{Device, GraphicsSettings, Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, Swapchain, PipelineVertexInputDescription};
+use crate::etna::{Device, GraphicsSettings, Swapchain};
+use crate::etna::pipelines::{Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
 use crate::etna::shader::{ ShaderModule};
 use crate::scene::Vertex;
 

@@ -20,7 +20,7 @@ pub struct EtnaEngine {
     scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
-    pipeline: etna::Pipeline,
+    pipeline: etna::pipelines::Pipeline,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
     physical_device: etna::PhysicalDevice,

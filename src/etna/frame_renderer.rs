@@ -2,9 +2,10 @@ use std::mem::size_of;
 
 use ash::vk;
 
-use crate::core::{ConstPtr, Mat4, Vec3};
+use crate::core::ConstPtr;
 use crate::etna;
-use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
+use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Swapchain, SwapchainResult};
+use crate::etna::pipelines::Pipeline;
 use crate::scene::{Model, Scene, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -202,7 +203,7 @@ impl FrameRenderer {
         unsafe { self.device.end_command_buffer(command_buffer) }
             .expect("Failed to record command buffer");
     }
-    
+
     fn current_command_buffer(&self) -> vk::CommandBuffer {
         self.command_buffers[self.current_frame]
     }
@@ -214,7 +215,7 @@ impl FrameRenderer {
     fn current_render_finished_semaphore(&self) -> vk::Semaphore {
         self.render_finished_semaphores[self.current_frame]
     }
-    
+
     fn current_in_flight_fence(&self) -> vk::Fence {
         self.in_flight_fences[self.current_frame]
     }
@@ -266,8 +267,8 @@ impl FrameRenderer {
 
         let set_layouts: Vec<vk::DescriptorSetLayout> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| pipeline.descriptor_set_layout).collect();
         let descriptor_set_alloc_infos = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(set_layouts.as_slice());
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(set_layouts.as_slice());
         let descriptor_sets = unsafe { device.allocate_descriptor_sets(&descriptor_set_alloc_infos) }
             .expect("Failed to allocate descriptor sets");
 

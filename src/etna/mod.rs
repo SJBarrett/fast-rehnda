@@ -17,8 +17,7 @@ pub use surface::*;
 mod swapchain;
 pub use swapchain::*;
 pub mod pipelines;
-mod pipeline;
-pub use pipeline::*;
+
 mod images;
 pub use images::*;
 
