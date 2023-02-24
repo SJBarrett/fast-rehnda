@@ -6,7 +6,7 @@ use crate::core::{ConstPtr, Mat4};
 use crate::etna;
 use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Swapchain, SwapchainResult};
 use crate::etna::pipelines::Pipeline;
-use crate::scene::{Model, Scene, TransformationMatrices};
+use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -36,7 +36,7 @@ impl FrameRenderer {
         let image_index = self.prepare_to_draw(swapchain)?;
 
         // update uniforms
-        self.update_uniforms(scene);
+        self.update_view_projection_ubo(&scene.camera);
         self.record_draw_commands(swapchain, pipeline, image_index, scene);
 
         self.submit_draw(swapchain, image_index)?;
@@ -76,15 +76,9 @@ impl FrameRenderer {
         Ok(image_index)
     }
 
-    fn update_uniforms(&mut self, scene: &Scene) {
-        // OPTIMISATION Use push constants for transformation matrices
-        let transformation_matrices = TransformationMatrices {
-            model: Mat4::ZERO,
-            view: scene.camera.transform,
-            projection: scene.camera.projection,
-        };
-        let transformations = &[transformation_matrices];
-        let buffer_data: &[u8] = bytemuck::cast_slice(transformations);
+    fn update_view_projection_ubo(&mut self, camera: &Camera) {
+        let view_proj = camera.to_view_proj();
+        let buffer_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&view_proj));
         self.uniform_buffers[self.current_frame].write_data(buffer_data);
     }
 
@@ -248,7 +242,7 @@ impl FrameRenderer {
 
         let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| {
             HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
-                size: size_of::<TransformationMatrices>() as u64,
+                size: size_of::<ViewProjectionMatrices>() as u64,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             })
         }).collect();
@@ -279,7 +273,7 @@ impl FrameRenderer {
             let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
                 .buffer(uniform_buffers[i].vk_buffer())
                 .offset(0)
-                .range(size_of::<TransformationMatrices>() as u64);
+                .range(size_of::<ViewProjectionMatrices>() as u64);
             let image_info = vk::DescriptorImageInfo::builder()
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                 .image_view(model.texture.image.image_view)
