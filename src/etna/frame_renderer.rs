@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::core::{ConstPtr, Mat4};
 use crate::etna;
 use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Swapchain, SwapchainResult};
 use crate::etna::pipelines::Pipeline;
@@ -79,7 +79,7 @@ impl FrameRenderer {
     fn update_uniforms(&mut self, scene: &Scene) {
         // OPTIMISATION Use push constants for transformation matrices
         let transformation_matrices = TransformationMatrices {
-            model: scene.model.transform,
+            model: Mat4::ZERO,
             view: scene.camera.transform,
             projection: scene.camera.projection,
         };
@@ -93,6 +93,9 @@ impl FrameRenderer {
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
             .expect("Failed to being recording command buffer");
+
+        let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&scene.model.transform));
+        unsafe { self.device.cmd_push_constants(command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data); }
 
         // with dynamic rendering we need to make the output image ready for writing to
         image_transitions::transition_image_layout(&self.device, &self.current_command_buffer(), swapchain.images[image_index as usize], &image_transitions::TransitionProps {

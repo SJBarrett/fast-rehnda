@@ -1,7 +1,8 @@
 use std::ffi::CString;
+use std::mem::size_of;
 use std::path::Path;
 use ash::vk;
-use crate::core::ConstPtr;
+use crate::core::{ConstPtr, Mat4};
 use crate::etna::{Device, GraphicsSettings, Swapchain};
 use crate::etna::pipelines::{Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
 use crate::etna::shader::{ ShaderModule};
@@ -40,6 +41,11 @@ pub fn basic_pipeline(device: ConstPtr<Device>, graphics_settings: &GraphicsSett
         bindings: &[Vertex::binding_description()],
         attributes: vertex_attributes.as_slice(),
     };
+    let push_constant = vk::PushConstantRange::builder()
+        .offset(0)
+        .size(size_of::<Mat4>() as u32)
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .build();
 
     let multisampling = PipelineMultisamplingInfo {
         msaa_samples: graphics_settings.msaa_samples,
@@ -49,6 +55,7 @@ pub fn basic_pipeline(device: ConstPtr<Device>, graphics_settings: &GraphicsSett
     let create_info = PipelineCreateInfo {
         descriptor_sets: &[transformation_matrices_layout_binding, sampler_layout_binding],
         shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],
+        push_constants: &[push_constant],
         extent: swapchain.extent,
         image_format: swapchain.image_format,
         vertex_input,

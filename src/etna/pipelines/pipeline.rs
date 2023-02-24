@@ -25,6 +25,7 @@ pub struct PipelineCreateInfo<'a> {
     pub descriptor_sets: &'a [vk::DescriptorSetLayoutBinding],
     pub shader_stages: &'a [vk::PipelineShaderStageCreateInfo],
     pub vertex_input: PipelineVertexInputDescription<'a>,
+    pub push_constants: &'a [vk::PushConstantRange],
     pub image_format: vk::Format,
     pub extent: vk::Extent2D,
     pub multisampling: PipelineMultisamplingInfo,
@@ -128,7 +129,7 @@ impl Pipeline {
         let set_layouts = &[descriptor_set_layout];
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(set_layouts)
-            .push_constant_ranges(&[]);
+            .push_constant_ranges(create_info.push_constants);
 
         let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
             .expect("Failed to create pipline layout");
