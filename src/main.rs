@@ -7,7 +7,7 @@ use crate::application::Application;
 
 mod core;
 mod etna;
-mod model;
+mod scene;
 mod application;
 mod etna_engine;
 

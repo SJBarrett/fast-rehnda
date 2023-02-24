@@ -4,7 +4,7 @@ use ash::vk;
 use crate::core::ConstPtr;
 use crate::etna::{Device, GraphicsSettings, Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, Swapchain, PipelineVertexInputDescription};
 use crate::etna::shader::{ ShaderModule};
-use crate::model::Vertex;
+use crate::scene::Vertex;
 
 pub fn basic_pipeline(device: ConstPtr<Device>, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> Pipeline {
     let transformation_matrices_layout_binding = vk::DescriptorSetLayoutBinding::builder()

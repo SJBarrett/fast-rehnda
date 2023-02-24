@@ -50,6 +50,10 @@ impl Swapchain {
     pub fn extent(&self) -> vk::Extent2D {
         self.extent
     }
+
+    pub fn aspect_ratio(&self) -> f32 {
+        self.extent.width as f32 / self.extent.height as f32
+    }
 }
 
 // intialisation functionality

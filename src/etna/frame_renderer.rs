@@ -1,18 +1,13 @@
 use std::mem::size_of;
-use std::time::Instant;
 
 use ash::vk;
-use lazy_static::lazy_static;
 
 use crate::core::{ConstPtr, Mat4, Vec3};
 use crate::etna;
 use crate::etna::{CommandPool, DepthBuffer, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, PhysicalDevice, Pipeline, Swapchain, SwapchainResult};
-use crate::model::{Model, TransformationMatrices};
+use crate::scene::{Model, Scene, TransformationMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
-lazy_static! {
-    static ref RENDERING_START_TIME: Instant = Instant::now();
-}
 
 pub struct FrameRenderer {
     device: ConstPtr<etna::Device>,
@@ -31,30 +26,29 @@ pub struct FrameRenderer {
 }
 
 impl FrameRenderer {
-    pub fn resize(&mut self, physical_device: &etna::PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain) {
+    pub fn resize(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain) {
         self.depth_buffer = DepthBuffer::create(self.device, physical_device, command_pool, swapchain.extent);
         self.color_image = Image::create_image(self.device, physical_device, &Self::multisampling_color_image_create_info(physical_device, swapchain));
     }
 
-    pub fn draw_frame(&mut self, swapchain: &etna::Swapchain, pipeline: &Pipeline, model: &Model) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &Pipeline, scene: &Scene) -> SwapchainResult<()> {
         let image_index = self.prepare_to_draw(swapchain)?;
 
-        self.record_draw_commands(swapchain, pipeline, image_index, model);
+        // update uniforms
+        self.update_uniforms(scene);
+        self.record_draw_commands(swapchain, pipeline, image_index, scene);
 
         self.submit_draw(swapchain, image_index)?;
         Ok(())
     }
 
-    fn submit_draw(&mut self, swapchain: &etna::Swapchain, image_index: u32) -> SwapchainResult<()> {
+    fn submit_draw(&mut self, swapchain: &Swapchain, image_index: u32) -> SwapchainResult<()> {
         // we need swapchain image to be available before we reach the color output stage (fragment shader)
         // so vertex shading could start before this point
         let wait_semaphores = &[self.current_image_available_semaphore()];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let signal_semaphores = &[self.current_render_finished_semaphore()];
         let command_buffers = &[self.current_command_buffer()];
-
-        // update uniforms
-        self.update_uniforms(swapchain.extent.width as f32 / swapchain.extent.height as f32);
 
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
@@ -68,7 +62,7 @@ impl FrameRenderer {
         swapchain.present(image_index, signal_semaphores)
     }
 
-    fn prepare_to_draw(&self, swapchain: &etna::Swapchain) -> SwapchainResult<u32> {
+    fn prepare_to_draw(&self, swapchain: &Swapchain) -> SwapchainResult<u32> {
         unsafe { self.device.wait_for_fences(&[self.current_in_flight_fence()], true, u64::MAX) }
             .expect("Failed to wait for in flight fence");
 
@@ -81,23 +75,19 @@ impl FrameRenderer {
         Ok(image_index)
     }
 
-    fn update_uniforms(&mut self, aspect_ratio: f32) {
-        let seconds_elapsed = RENDERING_START_TIME.elapsed().as_secs_f32();
-        let mut projection = Mat4::perspective_rh(45.0f32.to_radians(), aspect_ratio, 0.1, 10.0);
-        // flip the y axis (assuming math is OpenGl style)
-        projection.y_axis[1] *= -1.0;
+    fn update_uniforms(&mut self, scene: &Scene) {
         // OPTIMISATION Use push constants for transformation matrices
         let transformation_matrices = TransformationMatrices {
-            model: Mat4::from_rotation_z(seconds_elapsed * 90.0f32.to_radians()),
-            view: Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0)),
-            projection,
+            model: scene.model.transform,
+            view: scene.camera.transform,
+            projection: scene.camera.projection,
         };
         let transformations = &[transformation_matrices];
         let buffer_data: &[u8] = bytemuck::cast_slice(transformations);
         self.uniform_buffers[self.current_frame].write_data(buffer_data);
     }
 
-    fn record_draw_commands(&self, swapchain: &etna::Swapchain, pipeline: &Pipeline, image_index: u32, model: &Model) {
+    fn record_draw_commands(&self, swapchain: &Swapchain, pipeline: &Pipeline, image_index: u32, scene: &Scene) {
         let command_buffer = self.current_command_buffer();
         let begin_info = vk::CommandBufferBeginInfo::builder();
         unsafe { self.device.begin_command_buffer(command_buffer, &begin_info) }
@@ -179,17 +169,17 @@ impl FrameRenderer {
             .build()];
         unsafe { self.device.cmd_set_scissor(command_buffer, 0, &scissor); }
 
-        let buffers = &[model.vertex_buffer.buffer];
+        let buffers = &[scene.model.vertex_buffer.buffer];
         let offsets = &[0u64];
 
         unsafe {
             self.device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets);
-            self.device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
+            self.device.cmd_bind_index_buffer(command_buffer, scene.model.index_buffer.buffer, 0, vk::IndexType::UINT16);
 
             let descriptor_sets = &[self.descriptor_sets[self.current_frame]];
             self.device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, descriptor_sets, &[]);
-            // TODO don't use hardcoded vertex count, instead use a model vert count
-            self.device.cmd_draw_indexed(command_buffer, model.index_count, 1, 0, 0, 0);
+            // TODO don't use hardcoded vertex count, instead use a scene vert count
+            self.device.cmd_draw_indexed(command_buffer, scene.model.index_count, 1, 0, 0, 0);
             self.device.cmd_end_rendering(command_buffer);
         }
 
@@ -232,7 +222,7 @@ impl FrameRenderer {
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: ConstPtr<etna::Device>, physical_device: &etna::PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
+    pub fn create(device: ConstPtr<etna::Device>, physical_device: &PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
         let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();

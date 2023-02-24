@@ -1,3 +1,6 @@
+mod scene;
+pub use scene::*;
+
 mod model;
 pub use model::*;
 mod transformation;

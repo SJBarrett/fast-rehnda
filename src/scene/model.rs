@@ -2,11 +2,12 @@ use std::path::Path;
 
 use ash::vk;
 
-use crate::core::{ConstPtr, Vec2, Vec3};
+use crate::core::{ConstPtr, Mat4, Vec2, Vec3};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, Texture};
-use crate::model::Vertex;
+use crate::scene::Vertex;
 
 pub struct Model {
+    pub transform: Mat4,
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
     pub texture: Texture,
@@ -18,7 +19,7 @@ impl Model {
         let (models, _) = tobj::load_obj(obj_path, &tobj::GPU_LOAD_OPTIONS)
             .expect("Failed to load obj");
         if models.len() != 1 {
-            panic!("Only expected 1 model in the obj file");
+            panic!("Only expected 1 scene in the obj file");
         }
 
         let mut vertices: Vec<Vertex> = Vec::new();
@@ -58,6 +59,7 @@ impl Model {
 
         let texture = Texture::create(device, physical_device, command_pool, texture_path);
         Model {
+            transform: Mat4::IDENTITY,
             vertex_buffer,
             index_buffer,
             texture,
@@ -83,6 +85,7 @@ impl Model {
         let texture = Texture::create(device, physical_device, command_pool, texture_path);
 
         Model {
+            transform: Mat4::IDENTITY,
             vertex_buffer,
             index_buffer,
             texture,

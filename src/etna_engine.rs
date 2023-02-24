@@ -1,17 +1,23 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
+use lazy_static::lazy_static;
 
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use crate::core::LongLivedObject;
+use crate::core::{LongLivedObject, Mat4, Vec3};
 
 use crate::etna;
 use crate::etna::{pipelines, SwapchainError};
-use crate::model::Model;
+use crate::scene::{Camera, Model, Scene};
+
+lazy_static! {
+    static ref RENDERING_START_TIME: Instant = Instant::now();
+}
 
 pub struct EtnaEngine {
     // sync objects above here
-    model: Model,
+    scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
     pipeline: etna::Pipeline,
@@ -42,9 +48,13 @@ impl EtnaEngine {
         let pipeline = pipelines::basic_pipeline(device.ptr(),  &physical_device.graphics_settings, &swapchain);
         let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
 
-        let model = Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
-
-        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &pipeline, &command_pool, &swapchain, &model);
+        let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 10.0);
+        camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+        let scene = Scene {
+            camera,
+            model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"))
+        };
+        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &pipeline, &command_pool, &swapchain, &scene.model);
 
 
         EtnaEngine {
@@ -57,7 +67,7 @@ impl EtnaEngine {
             swapchain,
             pipeline,
             frame_renderer,
-            model,
+            scene,
             command_pool,
         }
     }
@@ -67,8 +77,8 @@ impl EtnaEngine {
         if self.is_minimized() {
             return;
         }
-
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.model);
+        Self::update_scene(&mut self.scene);
+        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.scene);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
@@ -81,8 +91,14 @@ impl EtnaEngine {
                     self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
                 );
                 self.frame_renderer.resize(&self.physical_device, &self.command_pool, &self.swapchain);
+                self.scene.camera.update_aspect_ratio(self.swapchain.aspect_ratio());
             }
         }
+    }
+
+    fn update_scene(scene: &mut Scene) {
+        let seconds_elapsed = RENDERING_START_TIME.elapsed().as_secs_f32();
+        scene.model.transform = Mat4::from_rotation_z(seconds_elapsed * 90.0f32.to_radians());
     }
 
     pub fn wait_idle(&self) {
