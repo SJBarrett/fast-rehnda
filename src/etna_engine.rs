@@ -38,15 +38,17 @@ impl EtnaEngine {
         let physical_device = etna::PhysicalDevice::pick_physical_device(instance.ptr(), &surface);
         info!("Graphics Settings: {:?}", physical_device.graphics_settings);
         let device = LongLivedObject::new(etna::Device::create(&instance, &surface, &physical_device));
+        let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
         let swapchain = etna::Swapchain::create(
             &instance,
             device.ptr(),
+            &physical_device,
             &surface,
+            &command_pool,
             &physical_device.queue_families(),
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
         let pipeline = pipelines::basic_pipeline(device.ptr(),  &physical_device.graphics_settings, &swapchain);
-        let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
 
         let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 10.0);
         camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
@@ -86,11 +88,12 @@ impl EtnaEngine {
                     return;
                 }
                 self.swapchain.recreate(
+                    &self.physical_device,
                     &self.surface,
+                    &self.command_pool,
                     &self.physical_device.queue_families(),
                     self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
                 );
-                self.frame_renderer.resize(&self.physical_device, &self.command_pool, &self.swapchain);
                 self.scene.camera.update_aspect_ratio(self.swapchain.aspect_ratio());
             }
         }

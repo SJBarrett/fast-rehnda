@@ -4,7 +4,7 @@ use log::debug;
 
 use crate::core::ConstPtr;
 use crate::etna;
-use crate::etna::{ChosenSwapchainProps, QueueFamilyIndices};
+use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, image_transitions, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices};
 
 pub struct Swapchain {
     device: ConstPtr<etna::Device>,
@@ -14,6 +14,9 @@ pub struct Swapchain {
     pub extent: vk::Extent2D,
     pub images: Vec<vk::Image>,
     pub image_views: Vec<vk::ImageView>,
+    pub depth_buffer: DepthBuffer,
+    pub color_image: Image,
+    pub msaa_enabled: bool,
 }
 
 pub type SwapchainResult<T> = Result<T, SwapchainError>;
@@ -58,7 +61,7 @@ impl Swapchain {
 
 // intialisation functionality
 impl Swapchain {
-    pub fn recreate(&mut self, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) {
+    pub fn recreate(&mut self, physical_device: &PhysicalDevice, surface: &vk::SurfaceKHR, command_pool: &CommandPool, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) {
         debug!("Recreating swapchain");
         unsafe { self.device.device_wait_idle() }
             .expect("Failed to wait for device idle when recreating swapchain");
@@ -71,14 +74,17 @@ impl Swapchain {
         self.swapchain = swapchain;
         self.images = images;
         self.image_views = image_views;
+        self.depth_buffer = DepthBuffer::create(self.device, physical_device, command_pool, extent);
+        self.color_image = Image::create_image(self.device, physical_device, &multisampling_color_image_create_info(physical_device, extent, image_format));
     }
-    pub fn create(instance: &ash::Instance, device: ConstPtr<etna::Device>, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
+    pub fn create(instance: &ash::Instance, device: ConstPtr<etna::Device>, physical_device: &PhysicalDevice, surface: &vk::SurfaceKHR, command_pool: &CommandPool, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
         let swapchain_fn = khr::Swapchain::new(instance, &device);
 
         let image_format = chosen_swapchain_props.surface_format.format;
         let extent = chosen_swapchain_props.extent;
         let (swapchain, images, image_views) = Self::create_swapchain_resources(&device, &swapchain_fn, surface, queue_family_indices, chosen_swapchain_props);
-
+        let depth_buffer = DepthBuffer::create(device, physical_device, command_pool, extent);
+        let color_image = Image::create_image(device, physical_device, &multisampling_color_image_create_info(physical_device, extent, image_format));
         Swapchain {
             device,
             swapchain_fn,
@@ -87,10 +93,13 @@ impl Swapchain {
             image_views,
             image_format,
             extent,
+            depth_buffer,
+            color_image,
+            msaa_enabled: physical_device.graphics_settings.is_msaa_enabled(),
         }
     }
 
-    fn create_swapchain_resources(device: &etna::Device, swapchain_fn: &khr::Swapchain, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> (vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>){
+    fn create_swapchain_resources(device: &etna::Device, swapchain_fn: &khr::Swapchain, surface: &vk::SurfaceKHR, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> (vk::SwapchainKHR, Vec<vk::Image>, Vec<vk::ImageView>) {
         // request one more than the min to avoid waiting on the driver
         let mut image_count = chosen_swapchain_props.capabilities.min_image_count + 1;
         if chosen_swapchain_props.capabilities.max_image_count > 0 && image_count > chosen_swapchain_props.capabilities.max_image_count {
@@ -170,5 +179,20 @@ impl Swapchain {
 impl Drop for Swapchain {
     fn drop(&mut self) {
         self.destroy_resources();
+    }
+}
+
+
+fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, extent: vk::Extent2D, format: vk::Format) -> ImageCreateInfo {
+    ImageCreateInfo {
+        width: extent.width,
+        height: extent.height,
+        format,
+        tiling: vk::ImageTiling::OPTIMAL,
+        usage: vk::ImageUsageFlags::TRANSIENT_ATTACHMENT | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        mip_levels: 1,
+        memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        image_aspect_flags: vk::ImageAspectFlags::COLOR,
+        num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
     }
 }
