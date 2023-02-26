@@ -17,6 +17,7 @@ pub use surface::*;
 mod swapchain;
 pub use swapchain::*;
 pub mod pipelines;
+pub mod vkinit;
 
 mod images;
 pub use images::*;

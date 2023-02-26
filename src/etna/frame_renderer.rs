@@ -4,7 +4,7 @@ use ash::vk;
 
 use crate::core::ConstPtr;
 use crate::etna;
-use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult};
+use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
 use crate::etna::pipelines::Pipeline;
 use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
@@ -14,16 +14,12 @@ pub struct FrameRenderer {
     device: ConstPtr<Device>,
     graphics_settings: GraphicsSettings,
     descriptor_pool: vk::DescriptorPool,
-    descriptor_sets: Vec<vk::DescriptorSet>,
-    command_buffers: Vec<vk::CommandBuffer>,
-    // sync objects
-    image_available_semaphores: Vec<vk::Semaphore>,
-    render_finished_semaphores: Vec<vk::Semaphore>,
-    in_flight_fences: Vec<vk::Fence>,
+    frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
     uniform_buffers: Vec<HostMappedBuffer>,
     current_frame: usize,
 }
 
+#[derive(Debug)]
 struct FrameData {
     image_available_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
@@ -38,31 +34,31 @@ impl FrameRenderer {
         // update uniforms
         self.update_view_projection_ubo(&scene.camera);
 
-        let frame_data = FrameData {
-            image_available_semaphore: self.image_available_semaphores[self.current_frame],
-            render_finished_semaphore: self.render_finished_semaphores[self.current_frame],
-            in_flight_fence: self.in_flight_fences[self.current_frame],
-            command_buffer: self.command_buffers[self.current_frame],
-            descriptor_set: self.descriptor_sets[self.current_frame],
-        };
-        let image_index = prepare_to_draw(&self.device, swapchain, &frame_data)?;
+        let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
+
+        // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
+        let image_index = prepare_to_draw(&self.device, swapchain, frame_data)?;
+
+        unsafe { self.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
+            .expect("Failed to being recording command buffer");
 
         cmd_begin_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
-        draw_pipeline_and_models(&self.device, swapchain, pipeline, scene, &frame_data);
+        draw_pipeline_and_models(&self.device, swapchain, pipeline, scene, frame_data);
         cmd_end_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
+
         unsafe { self.device.end_command_buffer(frame_data.command_buffer) }
             .expect("Failed to record command buffer");
 
-        submit_draw(&self.device, swapchain, image_index, &frame_data)?;
+        submit_draw(&self.device, swapchain, image_index, frame_data)?;
 
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        self.current_frame += 1;
         Ok(())
     }
 
     fn update_view_projection_ubo(&mut self, camera: &Camera) {
         let view_proj = camera.to_view_proj();
         let buffer_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&view_proj));
-        self.uniform_buffers[self.current_frame].write_data(buffer_data);
+        self.uniform_buffers[self.current_frame % MAX_FRAMES_IN_FLIGHT].write_data(buffer_data);
     }
 }
 
@@ -92,10 +88,6 @@ fn prepare_to_draw(device: &Device, swapchain: &Swapchain, frame_data: &FrameDat
     let image_index = swapchain.acquire_next_image_and_get_index(frame_data.image_available_semaphore)?;
     unsafe { device.reset_fences(&[frame_data.in_flight_fence]) }
         .expect("Failed to reset fences");
-
-    let begin_info = vk::CommandBufferBeginInfo::builder();
-    unsafe { device.begin_command_buffer(frame_data.command_buffer, &begin_info) }
-        .expect("Failed to being recording command buffer");
 
     Ok(image_index)
 }
@@ -217,23 +209,7 @@ impl FrameRenderer {
     pub fn create(device: ConstPtr<etna::Device>, physical_device: &PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
 
-        let semaphore_ci = vk::SemaphoreCreateInfo::builder().build();
-        let signaled_fence_ci = vk::FenceCreateInfo::builder()
-            .flags(vk::FenceCreateFlags::SIGNALED);
-
-        let mut image_available_semaphores: Vec<vk::Semaphore> = Vec::new();
-        let mut render_finished_semaphores: Vec<vk::Semaphore> = Vec::new();
-        let mut in_flight_fences: Vec<vk::Fence> = Vec::new();
-
-        for _i in 0..MAX_FRAMES_IN_FLIGHT {
-            image_available_semaphores.push(unsafe { device.create_semaphore(&semaphore_ci, None) }
-                .expect("Failed to create semaphore"));
-            render_finished_semaphores.push(unsafe { device.create_semaphore(&semaphore_ci, None) }
-                .expect("Failed to create semaphore"));
-            in_flight_fences.push(unsafe { device.create_fence(&signaled_fence_ci, None) }
-                .expect("Failed to create fence"));
-        }
-
+        // TODO remove uniform buffers from here
         let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| {
             HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
                 size: size_of::<ViewProjectionMatrices>() as u64,
@@ -262,6 +238,26 @@ impl FrameRenderer {
             .set_layouts(set_layouts.as_slice());
         let descriptor_sets = unsafe { device.allocate_descriptor_sets(&descriptor_set_alloc_infos) }
             .expect("Failed to allocate descriptor sets");
+
+        let frame_data: [FrameData; 2] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
+            let image_available_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
+                .expect("Failed to create semaphore");
+            let render_finished_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
+                .expect("Failed to create semaphore");
+            let in_flight_fence = unsafe { device.create_fence(&vkinit::SIGNALED_FENCE_CREATE_INFO, None) }
+                .expect("Failed to create fence");
+
+            FrameData {
+                image_available_semaphore,
+                render_finished_semaphore,
+                in_flight_fence,
+                descriptor_set: descriptor_sets[i],
+                command_buffer: command_buffers[i],
+            }
+        })
+            .collect::<Vec<FrameData>>()
+            .try_into()
+            .unwrap();
 
         for i in 0..MAX_FRAMES_IN_FLIGHT {
             let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
@@ -294,11 +290,7 @@ impl FrameRenderer {
             graphics_settings: physical_device.graphics_settings,
             uniform_buffers,
             descriptor_pool,
-            descriptor_sets,
-            command_buffers,
-            image_available_semaphores,
-            render_finished_semaphores,
-            in_flight_fences,
+            frame_data,
             current_frame: 0,
         }
     }
@@ -307,9 +299,11 @@ impl FrameRenderer {
 impl Drop for FrameRenderer {
     fn drop(&mut self) {
         unsafe {
-            self.image_available_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
-            self.render_finished_semaphores.iter().for_each(|semaphore| self.device.destroy_semaphore(*semaphore, None));
-            self.in_flight_fences.iter().for_each(|fence| self.device.destroy_fence(*fence, None));
+            for frame_data in &self.frame_data {
+                self.device.destroy_semaphore(frame_data.render_finished_semaphore, None);
+                self.device.destroy_semaphore(frame_data.image_available_semaphore, None);
+                self.device.destroy_fence(frame_data.in_flight_fence, None);
+            }
             self.device.destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }

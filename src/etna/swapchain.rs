@@ -4,7 +4,7 @@ use log::debug;
 
 use crate::core::ConstPtr;
 use crate::etna;
-use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, image_transitions, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices};
+use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices};
 
 pub struct Swapchain {
     device: ConstPtr<etna::Device>,
