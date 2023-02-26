@@ -1,10 +1,10 @@
+use std::fmt::{Debug, Formatter};
 use std::mem::size_of;
 
 use ash::vk;
 
 use crate::core::ConstPtr;
-use crate::etna;
-use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
+use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
 use crate::etna::pipelines::Pipeline;
 use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
@@ -12,14 +12,11 @@ const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct FrameRenderer {
     device: ConstPtr<Device>,
-    graphics_settings: GraphicsSettings,
     descriptor_pool: vk::DescriptorPool,
     frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
-    uniform_buffers: Vec<HostMappedBuffer>,
     current_frame: usize,
 }
 
-#[derive(Debug)]
 struct FrameData {
     image_available_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
@@ -27,14 +24,24 @@ struct FrameData {
 
     descriptor_set: vk::DescriptorSet,
     command_buffer: vk::CommandBuffer,
+
+    camera_buffer: HostMappedBuffer,
+}
+
+impl Debug for FrameData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl FrameRenderer {
     pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &Pipeline, scene: &Scene) -> SwapchainResult<()> {
-        // update uniforms
-        self.update_view_projection_ubo(&scene.camera);
+        // TODO remove these uniform updates
+
 
         let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
+
+        update_camera_buffer(frame_data, &scene.camera);
 
         // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
         let image_index = prepare_to_draw(&self.device, swapchain, frame_data)?;
@@ -54,12 +61,12 @@ impl FrameRenderer {
         self.current_frame += 1;
         Ok(())
     }
+}
 
-    fn update_view_projection_ubo(&mut self, camera: &Camera) {
-        let view_proj = camera.to_view_proj();
-        let buffer_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&view_proj));
-        self.uniform_buffers[self.current_frame % MAX_FRAMES_IN_FLIGHT].write_data(buffer_data);
-    }
+fn update_camera_buffer(frame_data: &FrameData, camera: &Camera) {
+    let view_proj = camera.to_view_proj();
+    let buffer_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&view_proj));
+    frame_data.camera_buffer.write_data(buffer_data);
 }
 
 fn submit_draw(device: &Device, swapchain: &Swapchain, image_index: u32, frame_data: &FrameData) -> SwapchainResult<()> {
@@ -204,33 +211,28 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
     });
 }
 
+fn create_descriptor_pool(device: &Device) -> vk::DescriptorPool {
+    let transform_ub_pool_size = vk::DescriptorPoolSize::builder()
+        .ty(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+        .build();
+    let texture_sampler_pool_size = vk::DescriptorPoolSize::builder()
+        .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
+        .build();
+    let pool_sizes = &[transform_ub_pool_size, texture_sampler_pool_size];
+    let descriptor_pool_ci = vk::DescriptorPoolCreateInfo::builder()
+        .pool_sizes(pool_sizes)
+        .max_sets(MAX_FRAMES_IN_FLIGHT as u32);
+    unsafe { device.create_descriptor_pool(&descriptor_pool_ci, None) }
+        .expect("Failed to create descriptor pool")
+}
+
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: ConstPtr<etna::Device>, physical_device: &PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, swapchain: &Swapchain, model: &Model) -> FrameRenderer {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, model: &Model) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
-
-        // TODO remove uniform buffers from here
-        let uniform_buffers: Vec<HostMappedBuffer> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| {
-            HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
-                size: size_of::<ViewProjectionMatrices>() as u64,
-                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
-            })
-        }).collect();
-
-        let transform_ub_pool_size = vk::DescriptorPoolSize::builder()
-            .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
-            .build();
-        let texture_sampler_pool_size = vk::DescriptorPoolSize::builder()
-            .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
-            .build();
-        let pool_sizes = &[transform_ub_pool_size, texture_sampler_pool_size];
-        let descriptor_pool_ci = vk::DescriptorPoolCreateInfo::builder()
-            .pool_sizes(pool_sizes)
-            .max_sets(MAX_FRAMES_IN_FLIGHT as u32);
-        let descriptor_pool = unsafe { device.create_descriptor_pool(&descriptor_pool_ci, None) }
-            .expect("Failed to create descriptor pool");
+        let descriptor_pool = create_descriptor_pool(&device);
 
         let set_layouts: Vec<vk::DescriptorSetLayout> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| pipeline.descriptor_set_layout).collect();
         let descriptor_set_alloc_infos = vk::DescriptorSetAllocateInfo::builder()
@@ -247,10 +249,15 @@ impl FrameRenderer {
             let in_flight_fence = unsafe { device.create_fence(&vkinit::SIGNALED_FENCE_CREATE_INFO, None) }
                 .expect("Failed to create fence");
 
+            let camera_buffer = HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
+                size: size_of::<ViewProjectionMatrices>() as u64,
+                usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
+            });
             FrameData {
                 image_available_semaphore,
                 render_finished_semaphore,
                 in_flight_fence,
+                camera_buffer,
                 descriptor_set: descriptor_sets[i],
                 command_buffer: command_buffers[i],
             }
@@ -261,7 +268,7 @@ impl FrameRenderer {
 
         for i in 0..MAX_FRAMES_IN_FLIGHT {
             let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
-                .buffer(uniform_buffers[i].vk_buffer())
+                .buffer(frame_data[i].camera_buffer.vk_buffer())
                 .offset(0)
                 .range(size_of::<ViewProjectionMatrices>() as u64);
             let image_info = vk::DescriptorImageInfo::builder()
@@ -287,8 +294,6 @@ impl FrameRenderer {
         }
         FrameRenderer {
             device,
-            graphics_settings: physical_device.graphics_settings,
-            uniform_buffers,
             descriptor_pool,
             frame_data,
             current_frame: 0,

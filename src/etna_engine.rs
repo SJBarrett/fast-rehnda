@@ -56,7 +56,7 @@ impl EtnaEngine {
             camera,
             model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"))
         };
-        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &pipeline, &command_pool, &swapchain, &scene.model);
+        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &pipeline, &command_pool, &scene.model);
 
 
         EtnaEngine {
