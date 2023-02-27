@@ -6,8 +6,7 @@ use crate::etna::MsaaSamples;
 
 pub struct Pipeline {
     device: ConstPtr<etna::Device>,
-    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub descriptor_sets: Vec<vk::DescriptorSet>,
+    pub texture_set: vk::DescriptorSet,
     pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 }
@@ -23,8 +22,9 @@ impl Drop for Pipeline {
 }
 
 pub struct PipelineCreateInfo<'a> {
-    pub descriptor_set_layouts: &'a [vk::DescriptorSetLayout],
-    pub descriptor_sets: &'a [vk::DescriptorSet],
+    pub global_set_layout: &'a vk::DescriptorSetLayout,
+    pub texture_set_layout: &'a vk::DescriptorSetLayout,
+    pub texture_set: &'a vk::DescriptorSet,
     pub shader_stages: &'a [vk::PipelineShaderStageCreateInfo],
     pub vertex_input: PipelineVertexInputDescription<'a>,
     pub push_constants: &'a [vk::PushConstantRange],
@@ -123,8 +123,9 @@ impl Pipeline {
             .color_attachment_formats(color_attachment_formats)
             .depth_attachment_format(vk::Format::D32_SFLOAT); // TODO don't assume this format
 
+        let set_layouts = &[*create_info.global_set_layout, *create_info.texture_set_layout];
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(create_info.descriptor_set_layouts)
+            .set_layouts(set_layouts)
             .push_constant_ranges(create_info.push_constants);
 
         let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
@@ -151,8 +152,7 @@ impl Pipeline {
         Pipeline {
             device,
             pipeline_layout,
-            descriptor_set_layouts: Vec::from(create_info.descriptor_set_layouts),
-            descriptor_sets: Vec::from(create_info.descriptor_sets),
+            texture_set: *create_info.texture_set,
             pipeline,
         }
     }

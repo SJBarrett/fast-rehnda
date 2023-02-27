@@ -37,6 +37,13 @@ impl DescriptorLayoutCache {
         }
     }
 
+    pub fn create_descriptor_layout_for_binding(&mut self, create_info: &vk::DescriptorSetLayoutBinding) -> vk::DescriptorSetLayout {
+        let bindings = &[*create_info];
+        let ci = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(bindings);
+        self.create_descriptor_layout(&ci)
+    }
+
     pub fn clear_cache(&mut self) {
         unsafe {
             for (_, set_layout) in &self.layout_cache {

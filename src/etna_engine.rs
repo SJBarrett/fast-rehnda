@@ -60,11 +60,8 @@ impl EtnaEngine {
             model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"))
         };
 
-        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool);
+        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_layout_cache, &mut descriptor_allocator);
         let pipeline = pipelines::textured_pipeline(device.ptr(), &mut descriptor_layout_cache, &mut descriptor_allocator, &physical_device.graphics_settings, &swapchain, &scene.model, &frame_renderer.frame_data[0].camera_buffer);
-
-
-
 
         EtnaEngine {
             window,
