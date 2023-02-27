@@ -4,7 +4,23 @@ use ash::vk;
 
 use crate::core::{ConstPtr, Mat4, Vec2, Vec3};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, Texture};
-use crate::scene::Vertex;
+use crate::scene::{MaterialHandle, ModelHandle, Vertex};
+
+pub struct RenderObject {
+    pub transform: Mat4,
+    pub model_handle: ModelHandle,
+    pub material_handle: MaterialHandle,
+}
+
+impl RenderObject {
+    pub fn new_with_transform(transform: Mat4, model_handle: ModelHandle, material_handle: MaterialHandle) -> RenderObject {
+        RenderObject {
+            transform,
+            model_handle,
+            material_handle,
+        }
+    }
+}
 
 pub struct Model {
     pub transform: Mat4,

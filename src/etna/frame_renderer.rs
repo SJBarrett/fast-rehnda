@@ -6,7 +6,7 @@ use ash::vk;
 use crate::core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
-use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
+use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -33,7 +33,7 @@ impl Debug for FrameData {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &MaterialPipeline, scene: &Scene) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &Swapchain, scene: &Scene) -> SwapchainResult<()> {
         let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
         update_global_buffer(frame_data, &scene.camera);
@@ -45,7 +45,30 @@ impl FrameRenderer {
             .expect("Failed to being recording command buffer");
 
         cmd_begin_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
-        draw_pipeline_and_models(&self.device, swapchain, pipeline, scene, frame_data);
+        let mut last_material_handle = MaterialHandle::null();
+        let mut last_material: Option<&MaterialPipeline> = None;
+        let mut last_model_handle = ModelHandle::null();
+        let mut last_model: Option<&Model> = None;
+        for object in scene.objects() {
+            // new material so we should bind the new pipeline
+            if last_material_handle.is_null() || last_material_handle != object.material_handle {
+                let material = scene.material_ref(&object.material_handle);
+                last_material = Some(material);
+                bind_material(&self.device, swapchain, material, frame_data);
+            }
+            let current_material = unsafe { last_material.unwrap_unchecked() };
+
+            // new model so bind model specific resources
+            if last_model_handle.is_null() || last_model_handle != object.model_handle {
+                let model = scene.model_ref(&object.model_handle);
+                last_model = Some(model);
+                bind_model(&self.device, frame_data, current_material, model);
+            }
+
+            let current_model = unsafe { last_model.unwrap_unchecked() };
+            draw_object(&self.device, frame_data, current_material, current_model, object);
+        }
+
         cmd_end_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
 
         unsafe { self.device.end_command_buffer(frame_data.command_buffer) }
@@ -94,7 +117,7 @@ fn prepare_to_draw(device: &Device, swapchain: &Swapchain, frame_data: &FrameDat
     Ok(image_index)
 }
 
-fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipeline, scene: &Scene, frame_data: &FrameData) {
+fn bind_material(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipeline, frame_data: &FrameData) {
     unsafe { device.cmd_bind_pipeline(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
     let viewport = [vk::Viewport::builder()
         .x(0.0)
@@ -111,21 +134,23 @@ fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &M
         .extent(swapchain.extent())
         .build()];
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
-    draw_model(device, frame_data, pipeline, &scene.model);
 }
 
-fn draw_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model) {
+fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model) {
     let buffers = &[model.vertex_buffer.buffer];
     let offsets = &[0u64];
-    let command_buffer = frame_data.command_buffer;
-    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&model.transform));
     unsafe {
-        device.cmd_push_constants(command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
-        device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets);
-        device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
+        device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
+        device.cmd_bind_index_buffer(frame_data.command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
+        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, pipeline.texture_set], &[]);
+    }
+}
 
-        device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, pipeline.texture_set], &[]);
-        device.cmd_draw_indexed(command_buffer, model.index_count, 1, 0, 0, 0);
+fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model, render_object: &RenderObject) {
+    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&render_object.transform));
+    unsafe {
+        device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
+        device.cmd_draw_indexed(frame_data.command_buffer, model.index_count, 1, 0, 0, 0);
     }
 }
 

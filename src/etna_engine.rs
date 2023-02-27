@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Instant;
 
-use lazy_static::lazy_static;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
@@ -10,18 +8,15 @@ use crate::core::{LongLivedObject, Mat4, Vec3};
 use crate::etna;
 use crate::etna::{CommandPool, material_pipeline, SwapchainError};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::scene::{Camera, Model, Scene};
+use crate::scene::{Camera, Scene};
 
-lazy_static! {
-    static ref RENDERING_START_TIME: Instant = Instant::now();
-}
+
 
 pub struct EtnaEngine {
     // sync objects above here
     scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
-    pipeline: material_pipeline::MaterialPipeline,
     descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
@@ -51,13 +46,18 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 10.0);
-        camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+        let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 100.0);
+        camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
         // TODO use a transfer queue instead of graphics
-        let scene = Scene::create_empty_scene_with_camera(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family), camera);
+        let mut scene = Scene::create_empty_scene_with_camera(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family), camera);
+        let viking_model_handle = scene.load_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
+        let pipeline = material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model_ref(&viking_model_handle));
+        let basic_material_handle = scene.add_material(pipeline);
+        scene.add_object(Mat4::IDENTITY, viking_model_handle, basic_material_handle);
+        scene.add_object(Mat4::from_translation(Vec3::new(-3.0, 0.0, 0.0)), viking_model_handle, basic_material_handle);
+        scene.add_object(Mat4::from_translation(Vec3::new(3.0, 0.0, 0.0)) * Mat4::from_rotation_z(90f32.to_radians()), viking_model_handle, basic_material_handle);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
-        let pipeline = material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model);
 
         EtnaEngine {
             window,
@@ -68,7 +68,6 @@ impl EtnaEngine {
             physical_device,
             device,
             swapchain,
-            pipeline,
             frame_renderer,
             scene,
             command_pool,
@@ -81,7 +80,7 @@ impl EtnaEngine {
             return;
         }
         Self::update_scene(&mut self.scene);
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.pipeline, &self.scene);
+        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.scene);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
@@ -101,8 +100,10 @@ impl EtnaEngine {
     }
 
     fn update_scene(scene: &mut Scene) {
-        let seconds_elapsed = RENDERING_START_TIME.elapsed().as_secs_f32();
-        scene.model.transform = Mat4::from_rotation_z(seconds_elapsed * 90.0f32.to_radians());
+        let delta = scene.delta();
+        scene.objects_mut()[0].transform *= Mat4::from_rotation_z(delta * 10.0f32.to_radians());
+        scene.objects_mut()[1].transform *= Mat4::from_rotation_z(delta * 20.0f32.to_radians());
+        scene.end_frame();
     }
 
     pub fn wait_idle(&self) {
