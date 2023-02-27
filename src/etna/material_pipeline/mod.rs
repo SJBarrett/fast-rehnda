@@ -1,5 +1,5 @@
-mod pipeline;
-pub use pipeline::*;
+mod material_pipeline;
+pub use material_pipeline::*;
 mod basic;
 pub use basic::*;
 mod descriptor_allocator;

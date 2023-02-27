@@ -4,14 +4,14 @@ use crate::core::ConstPtr;
 use crate::etna;
 use crate::etna::MsaaSamples;
 
-pub struct Pipeline {
+pub struct MaterialPipeline {
     device: ConstPtr<etna::Device>,
     pub texture_set: vk::DescriptorSet,
     pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 }
 
-impl Drop for Pipeline {
+impl Drop for MaterialPipeline {
     fn drop(&mut self) {
         unsafe {
             self.device.destroy_pipeline(self.pipeline, None);
@@ -43,8 +43,8 @@ pub struct PipelineVertexInputDescription<'a> {
     pub attributes: &'a [vk::VertexInputAttributeDescription],
 }
 
-impl Pipeline {
-    pub fn create(device: ConstPtr<etna::Device>, create_info: &PipelineCreateInfo) -> Pipeline {
+impl MaterialPipeline {
+    pub fn create(device: ConstPtr<etna::Device>, create_info: &PipelineCreateInfo) -> MaterialPipeline {
         let vertex_input_ci = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(create_info.vertex_input.bindings)
             .vertex_attribute_descriptions(create_info.vertex_input.attributes);
@@ -149,7 +149,7 @@ impl Pipeline {
         let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), pipeline_create_infos, None) }
             .expect("Failed to create graphics pipeline")[0];
 
-        Pipeline {
+        MaterialPipeline {
             device,
             pipeline_layout,
             texture_set: *create_info.texture_set,

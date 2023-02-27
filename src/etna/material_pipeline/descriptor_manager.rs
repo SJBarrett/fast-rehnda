@@ -1,7 +1,7 @@
 use ash::vk;
 use crate::core::ConstPtr;
 use crate::etna::Device;
-use crate::etna::pipelines::{layout_binding, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache};
+use crate::etna::material_pipeline::{layout_binding, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache};
 
 pub struct DescriptorManager {
     pub allocator: DescriptorAllocator,

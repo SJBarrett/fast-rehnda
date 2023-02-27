@@ -6,11 +6,11 @@ use ash::vk;
 
 use crate::core::{ConstPtr, Mat4};
 use crate::etna::{Device, GraphicsSettings, Swapchain};
-use crate::etna::pipelines::{DescriptorManager, Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
+use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
 use crate::etna::shader::ShaderModule;
 use crate::scene::{Model, Vertex};
 
-pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain, model: &Model) -> Pipeline {
+pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain, model: &Model) -> MaterialPipeline {
     let image_info = vk::DescriptorImageInfo::builder()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .image_view(model.texture.image.image_view)
@@ -62,5 +62,5 @@ pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Desc
         multisampling,
     };
 
-    Pipeline::create(device, &create_info)
+    MaterialPipeline::create(device, &create_info)
 }

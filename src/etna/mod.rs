@@ -16,7 +16,7 @@ mod surface;
 pub use surface::*;
 mod swapchain;
 pub use swapchain::*;
-pub mod pipelines;
+pub mod material_pipeline;
 pub mod vkinit;
 
 mod images;

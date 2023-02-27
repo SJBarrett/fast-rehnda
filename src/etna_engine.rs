@@ -8,8 +8,8 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::core::{LongLivedObject, Mat4, Vec3};
 use crate::etna;
-use crate::etna::{pipelines, SwapchainError};
-use crate::etna::pipelines::DescriptorManager;
+use crate::etna::{material_pipeline, SwapchainError};
+use crate::etna::material_pipeline::DescriptorManager;
 use crate::scene::{Camera, Model, Scene};
 
 lazy_static! {
@@ -21,7 +21,7 @@ pub struct EtnaEngine {
     scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
-    pipeline: pipelines::Pipeline,
+    pipeline: material_pipeline::MaterialPipeline,
     descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
@@ -59,7 +59,7 @@ impl EtnaEngine {
         };
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
-        let pipeline = pipelines::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model);
+        let pipeline = material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model);
 
         EtnaEngine {
             window,

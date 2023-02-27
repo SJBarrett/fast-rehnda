@@ -1,5 +1,5 @@
 use ash::vk;
-use crate::etna::pipelines::{DescriptorAllocationError, DescriptorAllocator, DescriptorLayoutCache};
+use crate::etna::material_pipeline::{DescriptorAllocationError, DescriptorAllocator, DescriptorLayoutCache};
 
 pub struct DescriptorBuilder<'a> {
     layout_cache: &'a mut DescriptorLayoutCache,

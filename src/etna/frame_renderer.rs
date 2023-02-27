@@ -5,7 +5,7 @@ use ash::vk;
 
 use crate::core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
-use crate::etna::pipelines::{DescriptorManager, Pipeline};
+use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -33,7 +33,7 @@ impl Debug for FrameData {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &Pipeline, scene: &Scene) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &MaterialPipeline, scene: &Scene) -> SwapchainResult<()> {
         let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
         update_global_buffer(frame_data, &scene.camera);
@@ -94,7 +94,7 @@ fn prepare_to_draw(device: &Device, swapchain: &Swapchain, frame_data: &FrameDat
     Ok(image_index)
 }
 
-fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &Pipeline, scene: &Scene, frame_data: &FrameData) {
+fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipeline, scene: &Scene, frame_data: &FrameData) {
     unsafe { device.cmd_bind_pipeline(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
     let viewport = [vk::Viewport::builder()
         .x(0.0)
@@ -114,7 +114,7 @@ fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &P
     draw_model(device, frame_data, pipeline, &scene.model);
 }
 
-fn draw_model(device: &Device, frame_data: &FrameData, pipeline: &Pipeline, model: &Model) {
+fn draw_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model) {
     let buffers = &[model.vertex_buffer.buffer];
     let offsets = &[0u64];
     let command_buffer = frame_data.command_buffer;
