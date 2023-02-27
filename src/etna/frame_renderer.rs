@@ -5,42 +5,38 @@ use ash::vk;
 
 use crate::core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
-use crate::etna::pipelines::{DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache, Pipeline};
+use crate::etna::pipelines::{DescriptorManager, Pipeline};
 use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
-// TODO go back to two
-const MAX_FRAMES_IN_FLIGHT: usize = 1;
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct FrameRenderer {
     device: ConstPtr<Device>,
-    pub frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
+    frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
     current_frame: usize,
 }
 
-pub struct FrameData {
+struct FrameData {
     image_available_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
     in_flight_fence: vk::Fence,
     command_buffer: vk::CommandBuffer,
 
-    pub camera_buffer: HostMappedBuffer,
+    global_data: HostMappedBuffer,
     global_descriptor: vk::DescriptorSet,
 }
 
 impl Debug for FrameData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
 impl FrameRenderer {
     pub fn draw_frame(&mut self, swapchain: &Swapchain, pipeline: &Pipeline, scene: &Scene) -> SwapchainResult<()> {
-        // TODO remove these uniform updates
-
-
         let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
-        update_camera_buffer(frame_data, &scene.camera);
+        update_global_buffer(frame_data, &scene.camera);
 
         // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
         let image_index = prepare_to_draw(&self.device, swapchain, frame_data)?;
@@ -62,10 +58,10 @@ impl FrameRenderer {
     }
 }
 
-fn update_camera_buffer(frame_data: &FrameData, camera: &Camera) {
+fn update_global_buffer(frame_data: &FrameData, camera: &Camera) {
     let view_proj = camera.to_view_proj();
     let buffer_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&view_proj));
-    frame_data.camera_buffer.write_data(buffer_data);
+    frame_data.global_data.write_data(buffer_data);
 }
 
 fn submit_draw(device: &Device, swapchain: &Swapchain, image_index: u32, frame_data: &FrameData) -> SwapchainResult<()> {
@@ -129,7 +125,6 @@ fn draw_model(device: &Device, frame_data: &FrameData, pipeline: &Pipeline, mode
         device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
 
         device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, pipeline.texture_set], &[]);
-        // TODO don't use hardcoded vertex count, instead use a scene vert count
         device.cmd_draw_indexed(command_buffer, model.index_count, 1, 0, 0, 0);
     }
 }
@@ -211,7 +206,7 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_layout_cache: &mut DescriptorLayoutCache, descriptor_allocator: &mut DescriptorAllocator) -> FrameRenderer {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
         let frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
             let image_available_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
@@ -229,7 +224,7 @@ impl FrameRenderer {
                 .buffer(camera_buffer.vk_buffer())
                 .offset(0)
                 .range(size_of::<ViewProjectionMatrices>() as u64);
-            let (descriptor_set, descriptor_set_layout) = DescriptorBuilder::begin(descriptor_layout_cache, descriptor_allocator)
+            let (descriptor_set, _) = descriptor_manager.descriptor_builder()
                 .bind_buffer(0, descriptor_buffer_info, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX)
                 .build()
                 .expect("Failed to build camera descriptor");
@@ -237,7 +232,7 @@ impl FrameRenderer {
                 image_available_semaphore,
                 render_finished_semaphore,
                 in_flight_fence,
-                camera_buffer,
+                global_data: camera_buffer,
                 command_buffer: command_buffers[i],
                 global_descriptor: descriptor_set,
             }

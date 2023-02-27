@@ -1,4 +1,5 @@
 use ash::vk;
+
 use crate::core::ConstPtr;
 use crate::etna::Device;
 
@@ -28,7 +29,7 @@ pub struct DescriptorAllocator {
 
 #[derive(Debug)]
 pub enum DescriptorAllocationError {
-    UNRECOVERABLE_ERROR
+    UnrecoverableError
 }
 
 impl DescriptorAllocator {
@@ -58,10 +59,10 @@ impl DescriptorAllocator {
                 if let Ok(new_allocated_sets) = unsafe { self.device.allocate_descriptor_sets(&new_alloc_info) } {
                     Ok(new_allocated_sets[0])
                 } else {
-                    Err(DescriptorAllocationError::UNRECOVERABLE_ERROR)
+                    Err(DescriptorAllocationError::UnrecoverableError)
                 }
-            },
-            _ => Err(DescriptorAllocationError::UNRECOVERABLE_ERROR),
+            }
+            _ => Err(DescriptorAllocationError::UnrecoverableError),
         }
     }
 
@@ -92,7 +93,7 @@ impl DescriptorAllocator {
     }
 
     fn grab_pool(&mut self) -> vk::DescriptorPool {
-        if let Some(descriptor_pool) =  self.free_pools.pop() {
+        if let Some(descriptor_pool) = self.free_pools.pop() {
             descriptor_pool
         } else {
             create_pool(&self.device, self.descriptor_sizes.as_slice(), 1000, vk::DescriptorPoolCreateFlags::empty())

@@ -8,3 +8,5 @@ mod descriptor_layout_cache;
 pub use descriptor_layout_cache::*;
 mod descriptor_builder;
 pub use descriptor_builder::*;
+mod descriptor_manager;
+pub use descriptor_manager::*;

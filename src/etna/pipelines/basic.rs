@@ -1,20 +1,21 @@
 use std::ffi::CString;
 use std::mem::size_of;
 use std::path::Path;
-use ash::vk;
-use crate::core::{ConstPtr, Mat4};
-use crate::etna::{Device, GraphicsSettings, HostMappedBuffer, Swapchain};
-use crate::etna::pipelines::{buffer_binding, descriptor_layout_cache, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache, Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
-use crate::etna::shader::{ ShaderModule};
-use crate::scene::{Model, Vertex, ViewProjectionMatrices};
 
-pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_layout_cache: &mut DescriptorLayoutCache, descriptor_allocator: &mut DescriptorAllocator, graphics_settings: &GraphicsSettings, swapchain: &Swapchain, model: &Model, camera_buffer: &HostMappedBuffer) -> Pipeline {
-    let global_layout = descriptor_layout_cache.create_descriptor_layout_for_binding(&buffer_binding(0, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX));
+use ash::vk;
+
+use crate::core::{ConstPtr, Mat4};
+use crate::etna::{Device, GraphicsSettings, Swapchain};
+use crate::etna::pipelines::{DescriptorManager, Pipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
+use crate::etna::shader::ShaderModule;
+use crate::scene::{Model, Vertex};
+
+pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain, model: &Model) -> Pipeline {
     let image_info = vk::DescriptorImageInfo::builder()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .image_view(model.texture.image.image_view)
         .sampler(model.texture.sampler);
-    let (descriptor_set, descriptor_set_layout) = DescriptorBuilder::begin(descriptor_layout_cache, descriptor_allocator)
+    let (descriptor_set, descriptor_set_layout) = descriptor_manager.descriptor_builder()
         .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
         .build()
         .expect("Failed to allocate bindings");
@@ -50,7 +51,7 @@ pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_layout_cache: &mut
     };
 
     let create_info = PipelineCreateInfo {
-        global_set_layout: &global_layout,
+        global_set_layout: &descriptor_manager.global_descriptor_layout,
         texture_set_layout: &descriptor_set_layout,
         texture_set: &descriptor_set,
         shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],

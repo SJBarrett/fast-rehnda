@@ -67,11 +67,12 @@ impl<'a> DescriptorBuilder<'a> {
     }
 }
 
-pub fn buffer_binding<'a>(binding: u32, descriptor_type: vk::DescriptorType, stage_flags: vk::ShaderStageFlags) -> vk::DescriptorSetLayoutBindingBuilder<'a> {
+pub fn layout_binding<'a>(binding: u32, descriptor_type: vk::DescriptorType, stage_flags: vk::ShaderStageFlags) -> vk::DescriptorSetLayoutBinding {
     let new = vk::DescriptorSetLayoutBinding::builder()
         .binding(binding)
         .descriptor_count(1)
         .descriptor_type(descriptor_type)
-        .stage_flags(stage_flags);
-    new
+        .stage_flags(stage_flags)
+        ;
+    new.build()
 }

@@ -1,15 +1,15 @@
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
-use lazy_static::lazy_static;
 
+use lazy_static::lazy_static;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use crate::core::{LongLivedObject, Mat4, Vec3};
 
+use crate::core::{LongLivedObject, Mat4, Vec3};
 use crate::etna;
 use crate::etna::{pipelines, SwapchainError};
-use crate::etna::pipelines::{DescriptorAllocator, DescriptorLayoutCache};
+use crate::etna::pipelines::DescriptorManager;
 use crate::scene::{Camera, Model, Scene};
 
 lazy_static! {
@@ -21,9 +21,8 @@ pub struct EtnaEngine {
     scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
-    pipeline: etna::pipelines::Pipeline,
-    descriptor_layout_cache: DescriptorLayoutCache,
-    descriptor_allocator: DescriptorAllocator,
+    pipeline: pipelines::Pipeline,
+    descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
     physical_device: etna::PhysicalDevice,
@@ -51,24 +50,22 @@ impl EtnaEngine {
             &physical_device.queue_families(),
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
-        let mut descriptor_layout_cache = DescriptorLayoutCache::create(device.ptr());
-        let mut descriptor_allocator = DescriptorAllocator::create(device.ptr());
+        let mut descriptor_manager = DescriptorManager::create(device.ptr());
         let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 10.0);
         camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
         let scene = Scene {
             camera,
-            model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"))
+            model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png")),
         };
 
-        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_layout_cache, &mut descriptor_allocator);
-        let pipeline = pipelines::textured_pipeline(device.ptr(), &mut descriptor_layout_cache, &mut descriptor_allocator, &physical_device.graphics_settings, &swapchain, &scene.model, &frame_renderer.frame_data[0].camera_buffer);
+        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
+        let pipeline = pipelines::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model);
 
         EtnaEngine {
             window,
             _entry: entry,
             _instance: instance,
-            descriptor_allocator,
-            descriptor_layout_cache,
+            descriptor_manager,
             surface,
             physical_device,
             device,
