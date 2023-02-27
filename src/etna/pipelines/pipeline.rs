@@ -6,7 +6,8 @@ use crate::etna::MsaaSamples;
 
 pub struct Pipeline {
     device: ConstPtr<etna::Device>,
-    pub descriptor_set_layout: vk::DescriptorSetLayout,
+    pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 }
@@ -16,13 +17,14 @@ impl Drop for Pipeline {
         unsafe {
             self.device.destroy_pipeline(self.pipeline, None);
             self.device.destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            // layouts are destroyed by the layout cache
         }
     }
 }
 
 pub struct PipelineCreateInfo<'a> {
-    pub descriptor_sets: &'a [vk::DescriptorSetLayoutBinding],
+    pub descriptor_set_layouts: &'a [vk::DescriptorSetLayout],
+    pub descriptor_sets: &'a [vk::DescriptorSet],
     pub shader_stages: &'a [vk::PipelineShaderStageCreateInfo],
     pub vertex_input: PipelineVertexInputDescription<'a>,
     pub push_constants: &'a [vk::PushConstantRange],
@@ -43,11 +45,6 @@ pub struct PipelineVertexInputDescription<'a> {
 
 impl Pipeline {
     pub fn create(device: ConstPtr<etna::Device>, create_info: &PipelineCreateInfo) -> Pipeline {
-        let descriptor_set_layout_ci = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(create_info.descriptor_sets);
-        let descriptor_set_layout = unsafe { device.create_descriptor_set_layout(&descriptor_set_layout_ci, None) }
-            .expect("Failed to create descriptor set layout");
-
         let vertex_input_ci = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(create_info.vertex_input.bindings)
             .vertex_attribute_descriptions(create_info.vertex_input.attributes);
@@ -126,9 +123,8 @@ impl Pipeline {
             .color_attachment_formats(color_attachment_formats)
             .depth_attachment_format(vk::Format::D32_SFLOAT); // TODO don't assume this format
 
-        let set_layouts = &[descriptor_set_layout];
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(set_layouts)
+            .set_layouts(create_info.descriptor_set_layouts)
             .push_constant_ranges(create_info.push_constants);
 
         let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
@@ -155,7 +151,8 @@ impl Pipeline {
         Pipeline {
             device,
             pipeline_layout,
-            descriptor_set_layout,
+            descriptor_set_layouts: Vec::from(create_info.descriptor_set_layouts),
+            descriptor_sets: Vec::from(create_info.descriptor_sets),
             pipeline,
         }
     }

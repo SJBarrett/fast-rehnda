@@ -8,24 +8,22 @@ use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateI
 use crate::etna::pipelines::Pipeline;
 use crate::scene::{Camera, Model, Scene, ViewProjectionMatrices};
 
-const MAX_FRAMES_IN_FLIGHT: usize = 2;
+// TODO go back to two
+const MAX_FRAMES_IN_FLIGHT: usize = 1;
 
 pub struct FrameRenderer {
     device: ConstPtr<Device>,
-    descriptor_pool: vk::DescriptorPool,
-    frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
+    pub frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
     current_frame: usize,
 }
 
-struct FrameData {
+pub struct FrameData {
     image_available_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
     in_flight_fence: vk::Fence,
-
-    descriptor_set: vk::DescriptorSet,
     command_buffer: vk::CommandBuffer,
 
-    camera_buffer: HostMappedBuffer,
+    pub camera_buffer: HostMappedBuffer,
 }
 
 impl Debug for FrameData {
@@ -116,21 +114,20 @@ fn draw_pipeline_and_models(device: &Device, swapchain: &Swapchain, pipeline: &P
         .extent(swapchain.extent())
         .build()];
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
-    draw_model(device, frame_data, pipeline.pipeline_layout, &scene.model);
+    draw_model(device, frame_data, pipeline, &scene.model);
 }
 
-fn draw_model(device: &Device, frame_data: &FrameData, pipeline_layout: vk::PipelineLayout, model: &Model) {
+fn draw_model(device: &Device, frame_data: &FrameData, pipeline: &Pipeline, model: &Model) {
     let buffers = &[model.vertex_buffer.buffer];
     let offsets = &[0u64];
     let command_buffer = frame_data.command_buffer;
     let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&model.transform));
     unsafe {
-        device.cmd_push_constants(command_buffer, pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
+        device.cmd_push_constants(command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
         device.cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets);
         device.cmd_bind_index_buffer(command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
 
-        let descriptor_sets = &[frame_data.descriptor_set];
-        device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, descriptor_sets, &[]);
+        device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, pipeline.descriptor_sets.as_slice(), &[]);
         // TODO don't use hardcoded vertex count, instead use a scene vert count
         device.cmd_draw_indexed(command_buffer, model.index_count, 1, 0, 0, 0);
     }
@@ -211,37 +208,11 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
     });
 }
 
-fn create_descriptor_pool(device: &Device) -> vk::DescriptorPool {
-    let transform_ub_pool_size = vk::DescriptorPoolSize::builder()
-        .ty(vk::DescriptorType::UNIFORM_BUFFER)
-        .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
-        .build();
-    let texture_sampler_pool_size = vk::DescriptorPoolSize::builder()
-        .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(MAX_FRAMES_IN_FLIGHT as u32)
-        .build();
-    let pool_sizes = &[transform_ub_pool_size, texture_sampler_pool_size];
-    let descriptor_pool_ci = vk::DescriptorPoolCreateInfo::builder()
-        .pool_sizes(pool_sizes)
-        .max_sets(MAX_FRAMES_IN_FLIGHT as u32);
-    unsafe { device.create_descriptor_pool(&descriptor_pool_ci, None) }
-        .expect("Failed to create descriptor pool")
-}
-
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, pipeline: &Pipeline, command_pool: &CommandPool, model: &Model) -> FrameRenderer {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
-        let descriptor_pool = create_descriptor_pool(&device);
-
-        let set_layouts: Vec<vk::DescriptorSetLayout> = (0..MAX_FRAMES_IN_FLIGHT).map(|_| pipeline.descriptor_set_layout).collect();
-        let descriptor_set_alloc_infos = vk::DescriptorSetAllocateInfo::builder()
-            .descriptor_pool(descriptor_pool)
-            .set_layouts(set_layouts.as_slice());
-        let descriptor_sets = unsafe { device.allocate_descriptor_sets(&descriptor_set_alloc_infos) }
-            .expect("Failed to allocate descriptor sets");
-
-        let frame_data: [FrameData; 2] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
+        let frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
             let image_available_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
                 .expect("Failed to create semaphore");
             let render_finished_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
@@ -258,7 +229,6 @@ impl FrameRenderer {
                 render_finished_semaphore,
                 in_flight_fence,
                 camera_buffer,
-                descriptor_set: descriptor_sets[i],
                 command_buffer: command_buffers[i],
             }
         })
@@ -266,35 +236,8 @@ impl FrameRenderer {
             .try_into()
             .unwrap();
 
-        for i in 0..MAX_FRAMES_IN_FLIGHT {
-            let descriptor_buffer_info = vk::DescriptorBufferInfo::builder()
-                .buffer(frame_data[i].camera_buffer.vk_buffer())
-                .offset(0)
-                .range(size_of::<ViewProjectionMatrices>() as u64);
-            let image_info = vk::DescriptorImageInfo::builder()
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(model.texture.image.image_view)
-                .sampler(model.texture.sampler);
-            let write_transforms_set = vk::WriteDescriptorSet::builder()
-                .dst_set(descriptor_sets[i])
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(std::slice::from_ref(&descriptor_buffer_info))
-                .build();
-            let write_image_set = vk::WriteDescriptorSet::builder()
-                .dst_set(descriptor_sets[i])
-                .dst_binding(1)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(std::slice::from_ref(&image_info))
-                .build();
-            let write_sets = &[write_transforms_set, write_image_set];
-            unsafe { device.update_descriptor_sets(write_sets, &[]); }
-        }
         FrameRenderer {
             device,
-            descriptor_pool,
             frame_data,
             current_frame: 0,
         }
@@ -309,7 +252,6 @@ impl Drop for FrameRenderer {
                 self.device.destroy_semaphore(frame_data.image_available_semaphore, None);
                 self.device.destroy_fence(frame_data.in_flight_fence, None);
             }
-            self.device.destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 }

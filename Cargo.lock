@@ -419,6 +419,7 @@ dependencies = [
 name = "fast-rehnda"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "ash",
  "ash-window",
  "bytemuck",
