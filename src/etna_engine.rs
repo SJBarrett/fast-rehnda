@@ -8,7 +8,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::core::{LongLivedObject, Mat4, Vec3};
 use crate::etna;
-use crate::etna::{material_pipeline, SwapchainError};
+use crate::etna::{CommandPool, material_pipeline, SwapchainError};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::scene::{Camera, Model, Scene};
 
@@ -25,7 +25,7 @@ pub struct EtnaEngine {
     descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
-    physical_device: etna::PhysicalDevice,
+    physical_device: LongLivedObject<etna::PhysicalDevice>,
     device: LongLivedObject<etna::Device>,
     _instance: LongLivedObject<etna::Instance>,
     _entry: ash::Entry,
@@ -37,7 +37,7 @@ impl EtnaEngine {
         let entry = ash::Entry::linked();
         let instance = LongLivedObject::new(etna::Instance::new(&entry));
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
-        let physical_device = etna::PhysicalDevice::pick_physical_device(instance.ptr(), &surface);
+        let physical_device = LongLivedObject::new(etna::PhysicalDevice::pick_physical_device(instance.ptr(), &surface));
         info!("Graphics Settings: {:?}", physical_device.graphics_settings);
         let device = LongLivedObject::new(etna::Device::create(&instance, &surface, &physical_device));
         let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
@@ -53,10 +53,8 @@ impl EtnaEngine {
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
         let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 10.0);
         camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 2.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
-        let scene = Scene {
-            camera,
-            model: Model::load_from_obj(device.ptr(), &physical_device, &command_pool, Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png")),
-        };
+        // TODO use a transfer queue instead of graphics
+        let scene = Scene::create_empty_scene_with_camera(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family), camera);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
         let pipeline = material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model);
