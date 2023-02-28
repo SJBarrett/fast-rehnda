@@ -2,7 +2,7 @@ use std::os::raw::c_void;
 
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 
 pub struct Buffer {

@@ -1,5 +1,5 @@
 use bytemuck_derive::{Pod, Zeroable};
-use crate::core::Mat4;
+use crate::rehnda_core::Mat4;
 
 #[repr(C)]
 #[derive(Zeroable, Pod, Debug, Copy, Clone)]

@@ -1,7 +1,7 @@
 use std::hash::{Hash};
 use ahash::AHashMap;
 use ash::vk;
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna::Device;
 
 pub struct DescriptorLayoutCache {

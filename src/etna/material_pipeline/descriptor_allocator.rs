@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna::Device;
 
 // this abstraction is an implementation of the abstraction described here -> https://vkguide.dev/docs/extra-chapter/abstracting_descriptors/

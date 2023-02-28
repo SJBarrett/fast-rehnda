@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use ash::vk;
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 
 pub struct ShaderModule {

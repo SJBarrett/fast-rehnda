@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna::{Device, PhysicalDevice};
 
 pub struct Image {

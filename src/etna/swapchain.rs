@@ -2,7 +2,7 @@ use ash::extensions::khr;
 use ash::vk;
 use log::debug;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices};
 

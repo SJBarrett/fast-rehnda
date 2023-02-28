@@ -5,7 +5,7 @@ use std::ops::Deref;
 use ash::extensions::khr;
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 use crate::etna::{GraphicsSettings, MsaaSamples};
 use crate::etna::utility::vk_cstr_to_string;

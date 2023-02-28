@@ -5,9 +5,9 @@ use std::time::Instant;
 use ahash::AHashMap;
 use lazy_static::lazy_static;
 
-use crate::core::{ConstPtr, Mat4};
+use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::etna::{CommandPool, Device, PhysicalDevice};
-use crate::etna::material_pipeline::MaterialPipeline;
+use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, Model, RenderObject};
 
 lazy_static! {
@@ -47,8 +47,15 @@ impl Scene {
         &mut self.objects
     }
 
-    pub fn load_model(&mut self, obj_path: &Path, texture_path: &Path) -> ModelHandle {
-        let model = Model::load_from_obj(self.device, &self.physical_device, &self.resource_command_pool, obj_path, texture_path);
+    pub fn load_textured_model(&mut self, obj_path: &Path, texture_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
+        let model = Model::load_textured_obj(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, obj_path, texture_path);
+        let handle = ModelHandle::new(self.models.len() as u32);
+        self.models.insert(handle, model);
+        handle
+    }
+
+    pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
+        let model = Model::load_obj(self.device, &self.physical_device, &self.resource_command_pool, obj_path);
         let handle = ModelHandle::new(self.models.len() as u32);
         self.models.insert(handle, model);
         handle

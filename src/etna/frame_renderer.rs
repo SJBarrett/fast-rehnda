@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
@@ -142,7 +142,12 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
     unsafe {
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
         device.cmd_bind_index_buffer(frame_data.command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
-        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, pipeline.texture_set], &[]);
+        if let Some(model_texture) = &model.texture {
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0,  &[frame_data.global_descriptor, model_texture.descriptor_set], &[]);
+        } else {
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0,  &[frame_data.global_descriptor], &[]);
+        }
+
     }
 }
 

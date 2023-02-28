@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 
 pub struct CommandPool {

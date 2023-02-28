@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::vk::Extent2D;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna::{CommandPool, Device, Image, ImageCreateInfo, PhysicalDevice};
 use crate::etna::image_transitions::{transition_image_layout, TransitionProps};
 

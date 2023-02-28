@@ -3,14 +3,16 @@ use std::path::Path;
 use ash::vk;
 use image::EncodableLayout;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Image, image_transitions, ImageCreateInfo, PhysicalDevice};
+use crate::etna::material_pipeline::DescriptorManager;
 
 pub struct Texture {
     device: ConstPtr<Device>,
     pub image: Image,
     pub sampler: vk::Sampler,
+    pub descriptor_set: vk::DescriptorSet,
 }
 
 impl Drop for Texture {
@@ -22,7 +24,7 @@ impl Drop for Texture {
 }
 
 impl Texture {
-    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path) -> Texture {
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path, descriptor_manager: &mut DescriptorManager) -> Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
         let src_buffer = Buffer::create_buffer_with_data(device, physical_device, BufferCreateInfo {
@@ -100,10 +102,20 @@ impl Texture {
         let sampler = unsafe { device.create_sampler(&sampler_create_info, None) }
             .expect("Failed to create sampler for Texture");
 
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image.image_view)
+            .sampler(sampler);
+        let (descriptor_set, descriptor_set_layout) = descriptor_manager.descriptor_builder()
+            .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .build()
+            .expect("Failed to allocate bindings");
+
         Texture {
             device,
             image,
             sampler,
+            descriptor_set,
         }
     }
 

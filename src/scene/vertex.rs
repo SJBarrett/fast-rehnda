@@ -1,14 +1,14 @@
 use std::mem::size_of;
 use ash::vk;
 use memoffset::offset_of;
-use crate::core::*;
+use crate::rehnda_core::*;
 use bytemuck_derive::{Zeroable, Pod};
 
 #[repr(C)]
 #[derive(Zeroable, Pod, Debug, Copy, Clone)]
 pub struct Vertex {
     pub position: Vec3,
-    pub color: Vec3,
+    pub normal: Vec3,
     pub texture_coord: Vec2,
 }
 
@@ -30,13 +30,14 @@ impl Vertex {
                 .format(vk::Format::R32G32B32_SFLOAT)
                 .offset(offset_of!(Vertex, position) as u32)
                 .build(),
-            // color attribute
+            // normal attribute
             vk::VertexInputAttributeDescription::builder()
                 .binding(0)
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(offset_of!(Vertex, color) as u32)
+                .offset(offset_of!(Vertex, position) as u32)
                 .build(),
+            // texture coord attribute
             vk::VertexInputAttributeDescription::builder()
                 .binding(0)
                 .location(2)

@@ -1,12 +1,11 @@
 use ash::vk;
 
-use crate::core::ConstPtr;
+use crate::rehnda_core::ConstPtr;
 use crate::etna;
 use crate::etna::MsaaSamples;
 
 pub struct MaterialPipeline {
     device: ConstPtr<etna::Device>,
-    pub texture_set: vk::DescriptorSet,
     pub pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 }
@@ -22,9 +21,8 @@ impl Drop for MaterialPipeline {
 }
 
 pub struct PipelineCreateInfo<'a> {
-    pub global_set_layout: &'a vk::DescriptorSetLayout,
-    pub texture_set_layout: &'a vk::DescriptorSetLayout,
-    pub texture_set: &'a vk::DescriptorSet,
+    pub global_set_layouts: &'a [vk::DescriptorSetLayout],
+    pub additional_descriptor_set_layouts: &'a [vk::DescriptorSetLayout],
     pub shader_stages: &'a [vk::PipelineShaderStageCreateInfo],
     pub vertex_input: PipelineVertexInputDescription<'a>,
     pub push_constants: &'a [vk::PushConstantRange],
@@ -123,9 +121,9 @@ impl MaterialPipeline {
             .color_attachment_formats(color_attachment_formats)
             .depth_attachment_format(vk::Format::D32_SFLOAT); // TODO don't assume this format
 
-        let set_layouts = &[*create_info.global_set_layout, *create_info.texture_set_layout];
+        let set_layouts: Vec<vk::DescriptorSetLayout> = [create_info.global_set_layouts, create_info.additional_descriptor_set_layouts].concat();
         let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(set_layouts)
+            .set_layouts(set_layouts.as_slice())
             .push_constant_ranges(create_info.push_constants);
 
         let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
@@ -152,7 +150,6 @@ impl MaterialPipeline {
         MaterialPipeline {
             device,
             pipeline_layout,
-            texture_set: *create_info.texture_set,
             pipeline,
         }
     }

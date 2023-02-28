@@ -2,8 +2,9 @@ use std::path::Path;
 
 use ash::vk;
 
-use crate::core::{ConstPtr, Mat4, Vec2, Vec3};
+use crate::rehnda_core::{ConstPtr, Mat4, Vec2, Vec3};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, Texture};
+use crate::etna::material_pipeline::DescriptorManager;
 use crate::scene::{MaterialHandle, ModelHandle, Vertex};
 
 pub struct RenderObject {
@@ -23,15 +24,37 @@ impl RenderObject {
 }
 
 pub struct Model {
-    pub transform: Mat4,
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub texture: Texture,
+    pub texture: Option<Texture>,
     pub index_count: u32,
 }
 
 impl Model {
-    pub fn load_from_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path, texture_path: &Path) -> Model {
+    pub fn load_textured_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, obj_path: &Path, texture_path: &Path) -> Model {
+        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, physical_device, command_pool, obj_path);
+
+        let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
+        Model {
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            texture: Some(texture),
+        }
+    }
+
+    pub fn load_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path) -> Model {
+        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, physical_device, command_pool, obj_path);
+
+        Model {
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            texture: None,
+        }
+    }
+
+    fn load_obj_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path) -> (u32, Buffer, Buffer) {
         let (models, _) = tobj::load_obj(obj_path, &tobj::GPU_LOAD_OPTIONS)
             .expect("Failed to load obj");
         if models.len() != 1 {
@@ -47,11 +70,15 @@ impl Model {
                     model.mesh.positions[index * 3 + 1],
                     model.mesh.positions[index * 3 + 2],
                 );
-                let color = Vec3::new(1.0, 1.0, 1.0);
                 let tex_coord = Vec2::new(model.mesh.texcoords[index * 2], 1.0 - model.mesh.texcoords[index * 2 + 1]);
+                let normal = Vec3::new(
+                    model.mesh.normals[index * 3],
+                    model.mesh.normals[index * 3 + 1],
+                    model.mesh.normals[index * 3 + 2],
+                );
                 let vertex = Vertex {
                     position: vertex_position,
-                    color,
+                    normal,
                     texture_coord: tex_coord,
                 };
                 vertices.push(vertex);
@@ -72,18 +99,10 @@ impl Model {
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
-
-        let texture = Texture::create(device, physical_device, command_pool, texture_path);
-        Model {
-            transform: Mat4::IDENTITY,
-            vertex_buffer,
-            index_buffer,
-            texture,
-            index_count: indices.len() as u32,
-        }
+        (indices.len() as u32, vertex_buffer, index_buffer)
     }
 
-    pub fn create_from_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, vertices: &[Vertex], indices: &[u16], texture_path: &Path) -> Model {
+    pub fn create_from_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, vertices: &[Vertex], indices: &[u16], texture_path: &Path) -> Model {
         let buffer_data: &[u8] = bytemuck::cast_slice(vertices);
         let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, &physical_device, command_pool, BufferCreateInfo {
             data: buffer_data,
@@ -98,13 +117,12 @@ impl Model {
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
 
-        let texture = Texture::create(device, physical_device, command_pool, texture_path);
+        let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
 
         Model {
-            transform: Mat4::IDENTITY,
             vertex_buffer,
             index_buffer,
-            texture,
+            texture: Some(texture),
             index_count: indices.len() as u32,
         }
     }

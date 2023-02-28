@@ -4,7 +4,7 @@ use winit::event_loop::EventLoop;
 
 use crate::application::Application;
 
-mod core;
+mod rehnda_core;
 mod etna;
 mod scene;
 mod application;

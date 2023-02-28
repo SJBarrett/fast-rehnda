@@ -1,14 +1,15 @@
 use std::path::Path;
 use std::sync::Arc;
+use glam::{EulerRot, Quat};
 
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use crate::core::{LongLivedObject, Mat4, Vec3};
+use crate::rehnda_core::{ConstPtr, LongLivedObject, Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, material_pipeline, SwapchainError};
+use crate::etna::{CommandPool, Device, material_pipeline, PhysicalDevice, Swapchain, SwapchainError};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::scene::{Camera, Scene};
+use crate::scene::{Camera, Scene, scene_builder};
 
 
 
@@ -46,16 +47,7 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 100.0);
-        camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
-        // TODO use a transfer queue instead of graphics
-        let mut scene = Scene::create_empty_scene_with_camera(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family), camera);
-        let viking_model_handle = scene.load_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"));
-        let pipeline = material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain, &scene.model_ref(&viking_model_handle));
-        let basic_material_handle = scene.add_material(pipeline);
-        scene.add_object(Mat4::IDENTITY, viking_model_handle, basic_material_handle);
-        scene.add_object(Mat4::from_translation(Vec3::new(-3.0, 0.0, 0.0)), viking_model_handle, basic_material_handle);
-        scene.add_object(Mat4::from_translation(Vec3::new(3.0, 0.0, 0.0)) * Mat4::from_rotation_z(90f32.to_radians()), viking_model_handle, basic_material_handle);
+        let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
 
@@ -102,7 +94,6 @@ impl EtnaEngine {
     fn update_scene(scene: &mut Scene) {
         let delta = scene.delta();
         scene.objects_mut()[0].transform *= Mat4::from_rotation_z(delta * 10.0f32.to_radians());
-        scene.objects_mut()[1].transform *= Mat4::from_rotation_z(delta * 20.0f32.to_radians());
         scene.end_frame();
     }
 
