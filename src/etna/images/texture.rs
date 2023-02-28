@@ -27,13 +27,12 @@ impl Texture {
     pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path, descriptor_manager: &mut DescriptorManager) -> Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
-        let src_buffer = Buffer::create_buffer_with_data(device, physical_device, BufferCreateInfo {
+        let src_buffer = Buffer::create_buffer_with_data(device, BufferCreateInfo {
             data: rgba_img.as_bytes(),
-            usage: vk::BufferUsageFlags::TRANSFER_SRC,
-            memory_properties: vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC
         });
         let mip_levels = (rgba_img.width().max(rgba_img.height())).ilog2() + 1;
-        let image = Image::create_image(device, physical_device, &ImageCreateInfo {
+        let image = Image::create_image(device, &ImageCreateInfo {
             width: rgba_img.width(),
             height: rgba_img.height(),
             mip_levels,
@@ -106,7 +105,7 @@ impl Texture {
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(image.image_view)
             .sampler(sampler);
-        let (descriptor_set, descriptor_set_layout) = descriptor_manager.descriptor_builder()
+        let (descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
             .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
             .build()
             .expect("Failed to allocate bindings");

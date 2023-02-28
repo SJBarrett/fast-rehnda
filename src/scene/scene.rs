@@ -55,7 +55,7 @@ impl Scene {
     }
 
     pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
-        let model = Model::load_obj(self.device, &self.physical_device, &self.resource_command_pool, obj_path);
+        let model = Model::load_obj(self.device, &self.resource_command_pool, obj_path);
         let handle = ModelHandle::new(self.models.len() as u32);
         self.models.insert(handle, model);
         handle

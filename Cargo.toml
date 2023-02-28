@@ -21,6 +21,7 @@ simplelog = "0.12"
 lazy_static = "1.4.0"
 tobj = "3.2.4"
 ahash = "0.8.3"
+gpu-allocator = "0.22.0"
 
 [build-dependencies]
 shaderc = "0.8.2"

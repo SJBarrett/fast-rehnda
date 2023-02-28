@@ -75,7 +75,7 @@ impl Swapchain {
         self.images = images;
         self.image_views = image_views;
         self.depth_buffer = DepthBuffer::create(self.device, physical_device, command_pool, extent);
-        self.color_image = Image::create_image(self.device, physical_device, &multisampling_color_image_create_info(physical_device, extent, image_format));
+        self.color_image = Image::create_image(self.device, &multisampling_color_image_create_info(physical_device, extent, image_format));
     }
     pub fn create(instance: &ash::Instance, device: ConstPtr<etna::Device>, physical_device: &PhysicalDevice, surface: &vk::SurfaceKHR, command_pool: &CommandPool, queue_family_indices: &QueueFamilyIndices, chosen_swapchain_props: ChosenSwapchainProps) -> Swapchain {
         let swapchain_fn = khr::Swapchain::new(instance, &device);
@@ -84,7 +84,7 @@ impl Swapchain {
         let extent = chosen_swapchain_props.extent;
         let (swapchain, images, image_views) = Self::create_swapchain_resources(&device, &swapchain_fn, surface, queue_family_indices, chosen_swapchain_props);
         let depth_buffer = DepthBuffer::create(device, physical_device, command_pool, extent);
-        let color_image = Image::create_image(device, physical_device, &multisampling_color_image_create_info(physical_device, extent, image_format));
+        let color_image = Image::create_image(device, &multisampling_color_image_create_info(physical_device, extent, image_format));
         Swapchain {
             device,
             swapchain_fn,

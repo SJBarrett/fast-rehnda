@@ -82,6 +82,10 @@ impl Instance {
             debug_layer: ManuallyDrop::new(debug_layer),
         }
     }
+
+    pub fn ash_handle(&self) -> ash::Instance {
+        self.instance.clone()
+    }
 }
 // destruction
 impl Drop for Instance {

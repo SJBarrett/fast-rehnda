@@ -1,17 +1,13 @@
-use std::path::Path;
 use std::sync::Arc;
-use glam::{EulerRot, Quat};
 
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
-use crate::rehnda_core::{ConstPtr, LongLivedObject, Mat4, Vec3};
 use crate::etna;
-use crate::etna::{CommandPool, Device, material_pipeline, PhysicalDevice, Swapchain, SwapchainError};
+use crate::etna::{CommandPool, Device, PhysicalDevice, Swapchain, SwapchainError};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::scene::{Camera, Scene, scene_builder};
-
-
+use crate::rehnda_core::{LongLivedObject, Mat4};
+use crate::scene::{Scene, scene_builder};
 
 pub struct EtnaEngine {
     // sync objects above here
@@ -21,8 +17,8 @@ pub struct EtnaEngine {
     descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
-    physical_device: LongLivedObject<etna::PhysicalDevice>,
-    device: LongLivedObject<etna::Device>,
+    physical_device: LongLivedObject<PhysicalDevice>,
+    device: LongLivedObject<Device>,
     _instance: LongLivedObject<etna::Instance>,
     _entry: ash::Entry,
     window: Arc<winit::window::Window>,
@@ -33,23 +29,23 @@ impl EtnaEngine {
         let entry = ash::Entry::linked();
         let instance = LongLivedObject::new(etna::Instance::new(&entry));
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
-        let physical_device = LongLivedObject::new(etna::PhysicalDevice::pick_physical_device(instance.ptr(), &surface));
+        let physical_device = LongLivedObject::new(PhysicalDevice::pick_physical_device(instance.ptr(), &surface));
         info!("Graphics Settings: {:?}", physical_device.graphics_settings);
-        let device = LongLivedObject::new(etna::Device::create(&instance, &surface, &physical_device));
-        let command_pool = etna::CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
-        let swapchain = etna::Swapchain::create(
+        let device = LongLivedObject::new(Device::create(&instance, &surface, &physical_device));
+        let command_pool = CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family);
+        let swapchain = Swapchain::create(
             &instance,
             device.ptr(),
             &physical_device,
             &surface,
             &command_pool,
             &physical_device.queue_families(),
-            surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.vk()),
+            surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
         let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
-        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &physical_device, &command_pool, &mut descriptor_manager);
+        let frame_renderer = etna::FrameRenderer::create(device.ptr(), &command_pool, &mut descriptor_manager);
 
         EtnaEngine {
             window,
@@ -84,7 +80,7 @@ impl EtnaEngine {
                     &self.surface,
                     &self.command_pool,
                     &self.physical_device.queue_families(),
-                    self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.vk()),
+                    self.surface.query_best_swapchain_creation_details(self.window.inner_size(), self.physical_device.handle()),
                 );
                 self.scene.camera.update_aspect_ratio(self.swapchain.aspect_ratio());
             }

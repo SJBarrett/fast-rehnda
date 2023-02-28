@@ -10,10 +10,11 @@ use crate::etna;
 use crate::etna::{GraphicsSettings, MsaaSamples};
 use crate::etna::utility::vk_cstr_to_string;
 
-pub const DEVICE_EXTENSIONS: [&CStr; 3] = [
+pub const DEVICE_EXTENSIONS: [&CStr; 4] = [
     khr::Swapchain::name(),
     khr::DynamicRendering::name(),
     khr::Synchronization2::name(),
+    khr::BufferDeviceAddress::name(),
 ];
 
 pub struct PhysicalDevice {
@@ -34,7 +35,7 @@ impl Deref for PhysicalDevice {
 }
 
 impl PhysicalDevice {
-    pub fn vk(&self) -> vk::PhysicalDevice {
+    pub fn handle(&self) -> vk::PhysicalDevice {
         self.physical_device
     }
 
@@ -90,7 +91,7 @@ impl PhysicalDevice {
         }
     }
 
-    pub fn find_memory_type(&self, type_filter: u32, properties: vk::MemoryPropertyFlags) -> u32 {
+    pub fn _find_memory_type(&self, type_filter: u32, properties: vk::MemoryPropertyFlags) -> u32 {
         let memory_properties = unsafe { self.instance.get_physical_device_memory_properties(self.physical_device) };
         for i in 0..memory_properties.memory_type_count {
             if (type_filter & (1u32 << i)) > 0 && memory_properties.memory_types[i as usize].property_flags.contains(properties) {

@@ -4,7 +4,7 @@ use std::mem::size_of;
 use ash::vk;
 
 use crate::rehnda_core::ConstPtr;
-use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
+use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
 
@@ -67,6 +67,8 @@ impl FrameRenderer {
 
             let current_model = unsafe { last_model.unwrap_unchecked() };
             draw_object(&self.device, frame_data, current_material, current_model, object);
+            last_material_handle = object.material_handle;
+            last_model_handle = object.model_handle;
         }
 
         cmd_end_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
@@ -236,7 +238,7 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
 
 // initialisation
 impl FrameRenderer {
-    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> FrameRenderer {
+    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> FrameRenderer {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
         let frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
             let image_available_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
@@ -246,7 +248,7 @@ impl FrameRenderer {
             let in_flight_fence = unsafe { device.create_fence(&vkinit::SIGNALED_FENCE_CREATE_INFO, None) }
                 .expect("Failed to create fence");
 
-            let camera_buffer = HostMappedBuffer::create(device, physical_device, HostMappedBufferCreateInfo {
+            let camera_buffer = HostMappedBuffer::create(device, HostMappedBufferCreateInfo {
                 size: size_of::<ViewProjectionMatrices>() as u64,
                 usage: vk::BufferUsageFlags::UNIFORM_BUFFER,
             });

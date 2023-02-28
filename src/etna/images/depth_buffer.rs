@@ -20,7 +20,7 @@ impl DepthBuffer {
         let candidate_formats = [vk::Format::D32_SFLOAT, vk::Format::D32_SFLOAT_S8_UINT, vk::Format::D24_UNORM_S8_UINT];
         let depth_format = physical_device.find_supported_format(&candidate_formats, vk::ImageTiling::OPTIMAL, vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             .expect("Failed to find supported format for depth buffer");
-        let image = Image::create_image(device, physical_device, &ImageCreateInfo {
+        let image = Image::create_image(device, &ImageCreateInfo {
             width: extent.width,
             height: extent.height,
             mip_levels: 1,

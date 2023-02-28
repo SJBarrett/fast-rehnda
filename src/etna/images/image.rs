@@ -1,12 +1,16 @@
-use ash::vk;
+use std::mem::ManuallyDrop;
 
+use ash::vk;
+use gpu_allocator::MemoryLocation;
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
+
+use crate::etna::Device;
 use crate::rehnda_core::ConstPtr;
-use crate::etna::{Device, PhysicalDevice};
 
 pub struct Image {
     device: ConstPtr<Device>,
     pub vk_image: vk::Image,
-    pub device_memory: vk::DeviceMemory,
+    pub allocation: ManuallyDrop<Allocation>,
     pub image_view: vk::ImageView,
     pub mip_levels: u32,
     pub format: vk::Format,
@@ -17,7 +21,7 @@ impl Drop for Image {
         unsafe {
             self.device.destroy_image_view(self.image_view, None);
             self.device.destroy_image(self.vk_image, None);
-            self.device.free_memory(self.device_memory, None);
+            self.device.free_allocation(ManuallyDrop::take(&mut self.allocation));
         }
     }
 }
@@ -35,7 +39,7 @@ pub struct ImageCreateInfo {
 }
 
 impl Image {
-    pub fn create_image(device: ConstPtr<Device>, physical_device: &PhysicalDevice, create_info: &ImageCreateInfo) -> Image {
+    pub fn create_image(device: ConstPtr<Device>, create_info: &ImageCreateInfo) -> Image {
         let image_ci = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(vk::Extent3D {
@@ -57,12 +61,14 @@ impl Image {
             .expect("Failed to create image for texture");
 
         let memory_requirements = unsafe { device.get_image_memory_requirements(image) };
-        let alloc_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(memory_requirements.size)
-            .memory_type_index(physical_device.find_memory_type(memory_requirements.memory_type_bits, create_info.memory_properties));
-        let device_memory = unsafe { device.allocate_memory(&alloc_info, None) }
-            .expect("Failed to allocate memory for texture");
-        unsafe { device.bind_image_memory(image, device_memory, 0) }
+        let allocation = device.allocate(&AllocationCreateDesc {
+            name: "Image memory",
+            requirements: memory_requirements,
+            location: MemoryLocation::GpuOnly,
+            linear: false,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+        }).expect("Failed to allocate image memory");
+        unsafe { device.bind_image_memory(image, allocation.memory(), allocation.offset()) }
             .expect("Failed to bind image memory for texture");
 
         let view_ci = vk::ImageViewCreateInfo::builder()
@@ -84,7 +90,7 @@ impl Image {
             device,
             vk_image: image,
             image_view,
-            device_memory,
+            allocation: ManuallyDrop::new(allocation),
             mip_levels: create_info.mip_levels,
             format: create_info.format,
         }

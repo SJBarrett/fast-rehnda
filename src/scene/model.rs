@@ -32,7 +32,7 @@ pub struct Model {
 
 impl Model {
     pub fn load_textured_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, obj_path: &Path, texture_path: &Path) -> Model {
-        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, physical_device, command_pool, obj_path);
+        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, command_pool, obj_path);
 
         let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
         Model {
@@ -43,8 +43,8 @@ impl Model {
         }
     }
 
-    pub fn load_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path) -> Model {
-        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, physical_device, command_pool, obj_path);
+    pub fn load_obj(device: ConstPtr<Device>, command_pool: &CommandPool, obj_path: &Path) -> Model {
+        let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, command_pool, obj_path);
 
         Model {
             vertex_buffer,
@@ -54,7 +54,7 @@ impl Model {
         }
     }
 
-    fn load_obj_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, obj_path: &Path) -> (u32, Buffer, Buffer) {
+    fn load_obj_vertices_and_indices(device: ConstPtr<Device>, command_pool: &CommandPool, obj_path: &Path) -> (u32, Buffer, Buffer) {
         let (models, _) = tobj::load_obj(obj_path, &tobj::GPU_LOAD_OPTIONS)
             .expect("Failed to load obj");
         if models.len() != 1 {
@@ -87,34 +87,30 @@ impl Model {
             indices = model.mesh.indices.iter().map(|&index| index as u16).collect();
         }
         let vertex_data: &[u8] = bytemuck::cast_slice(vertices.as_slice());
-        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, physical_device, command_pool, BufferCreateInfo {
+        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: vertex_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
 
         let index_buffer_data: &[u8] = bytemuck::cast_slice(indices.as_slice());
-        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, physical_device, command_pool, BufferCreateInfo {
+        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: index_buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
         (indices.len() as u32, vertex_buffer, index_buffer)
     }
 
     pub fn create_from_vertices_and_indices(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, vertices: &[Vertex], indices: &[u16], texture_path: &Path) -> Model {
         let buffer_data: &[u8] = bytemuck::cast_slice(vertices);
-        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, &physical_device, command_pool, BufferCreateInfo {
+        let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
 
         let index_buffer_data: &[u8] = bytemuck::cast_slice(indices);
-        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, &physical_device, command_pool, BufferCreateInfo {
+        let index_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: index_buffer_data,
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         });
 
         let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
