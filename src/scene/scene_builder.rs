@@ -20,6 +20,6 @@ pub fn basic_scene(device: ConstPtr<Device>, physical_device: ConstPtr<PhysicalD
     // objects
     scene.add_object(Mat4::IDENTITY, viking_model_handle, textured_material);
     scene.add_object(Mat4::from_translation(Vec3::new(-3.0, 0.0, 0.0)), viking_model_handle, textured_material);
-    scene.add_object(Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (3.0, 0.0, 0.0).into()), suzanne, non_textured_material);
+    scene.add_object(Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (0.0, 1.0, 0.0).into()), suzanne, non_textured_material);
     scene
 }
