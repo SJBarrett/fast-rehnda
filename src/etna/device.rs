@@ -1,7 +1,7 @@
+use std::cell::UnsafeCell;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::os::raw::c_char;
-use std::sync::Mutex;
 
 use ash::vk;
 use gpu_allocator::AllocatorDebugSettings;
@@ -12,7 +12,7 @@ use crate::etna::{DEVICE_EXTENSIONS, VALIDATION_LAYERS};
 
 pub struct Device {
     device: ash::Device,
-    pub allocator: ManuallyDrop<Mutex<Allocator>>,
+    pub allocator: ManuallyDrop<UnsafeCell<Allocator>>,
     pub enabled_features: vk::PhysicalDeviceFeatures,
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
@@ -93,18 +93,17 @@ impl Device {
             enabled_features: physical_device_features.build(),
             graphics_queue,
             present_queue,
-            allocator: ManuallyDrop::new(Mutex::new(allocator)),
+            allocator: ManuallyDrop::new(UnsafeCell::new(allocator)),
         }
     }
 
     pub fn allocate(&self, allocation_desc: &AllocationCreateDesc) -> gpu_allocator::Result<Allocation> {
-        let mut allocator = self.allocator.lock().unwrap();
-        allocator.allocate(allocation_desc)
+         unsafe { (*self.allocator.get()).allocate(allocation_desc) }
     }
 
     pub fn free_allocation(&self, allocation: Allocation) {
-        let mut allocator = self.allocator.lock().unwrap();
-        allocator.free(allocation).expect("Failed to free memory allocation");
+        unsafe { (*self.allocator.get()).free(allocation) }
+            .expect("Failed to free memory allocation")
     }
 }
 
