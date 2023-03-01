@@ -1,3 +1,5 @@
+extern crate core;
+
 use log::LevelFilter;
 use simplelog::{ColorChoice, Config, TerminalMode, TermLogger};
 use winit::event_loop::EventLoop;
@@ -7,6 +9,7 @@ use crate::application::Application;
 mod rehnda_core;
 mod etna;
 mod scene;
+mod ui;
 mod application;
 mod etna_engine;
 

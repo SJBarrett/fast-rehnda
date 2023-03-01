@@ -27,4 +27,4 @@ pub use aggregate_commands::*;
 
 pub mod utility;
 mod debug;
-mod shader;
+pub mod shader;

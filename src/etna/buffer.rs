@@ -5,6 +5,7 @@ use std::ptr::NonNull;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
+use log::{debug, info};
 
 use crate::rehnda_core::ConstPtr;
 use crate::etna;
@@ -124,6 +125,10 @@ impl HostMappedBuffer {
 
     pub fn write_data(&self, data: &[u8]) {
         unsafe { self.mapped_memory.as_ptr().copy_from_nonoverlapping(data.as_ptr() as *const c_void, data.len()); }
+    }
+
+    pub fn size(&self) -> u64 {
+        self.buffer.size
     }
 
     pub fn vk_buffer(&self) -> vk::Buffer {

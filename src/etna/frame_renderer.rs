@@ -7,8 +7,9 @@ use crate::rehnda_core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
+use crate::ui::EguiRenderer;
 
-const MAX_FRAMES_IN_FLIGHT: usize = 2;
+const MAX_FRAMES_IN_FLIGHT: usize = 1;
 
 pub struct FrameRenderer {
     device: ConstPtr<Device>,
@@ -33,13 +34,14 @@ impl Debug for FrameData {
 }
 
 impl FrameRenderer {
-    pub fn draw_frame(&mut self, swapchain: &Swapchain, scene: &Scene) -> SwapchainResult<()> {
+    pub fn draw_frame(&mut self, swapchain: &Swapchain, scene: &Scene, egui_renderer: &mut EguiRenderer) -> SwapchainResult<()> {
         let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
         update_global_buffer(frame_data, &scene.camera);
 
         // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
         let image_index = prepare_to_draw(&self.device, swapchain, frame_data)?;
+        egui_renderer.update_resources();
 
         unsafe { self.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
             .expect("Failed to being recording command buffer");
@@ -70,6 +72,8 @@ impl FrameRenderer {
             last_material_handle = object.material_handle;
             last_model_handle = object.model_handle;
         }
+
+        egui_renderer.draw(&self.device, swapchain, frame_data.command_buffer);
 
         cmd_end_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
 

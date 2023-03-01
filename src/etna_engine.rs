@@ -8,12 +8,14 @@ use crate::etna::{CommandPool, Device, PhysicalDevice, Swapchain, SwapchainError
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4};
 use crate::scene::{Scene, scene_builder};
+use crate::ui::RehndaUi;
 
 pub struct EtnaEngine {
     // sync objects above here
     scene: Scene,
     command_pool: etna::CommandPool,
     frame_renderer: etna::FrameRenderer,
+    ui: RehndaUi,
     descriptor_manager: DescriptorManager,
     swapchain: etna::Swapchain,
     surface: etna::Surface,
@@ -43,6 +45,7 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
+        let ui = RehndaUi::create(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain);
         let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &command_pool, &mut descriptor_manager);
@@ -52,6 +55,7 @@ impl EtnaEngine {
             _entry: entry,
             _instance: instance,
             descriptor_manager,
+            ui,
             surface,
             physical_device,
             device,
@@ -67,8 +71,9 @@ impl EtnaEngine {
         if self.is_minimized() {
             return;
         }
+        self.ui.run(egui::RawInput::default());
         Self::update_scene(&mut self.scene);
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.scene);
+        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.scene, &mut self.ui.egui_renderer);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
