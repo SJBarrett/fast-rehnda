@@ -29,6 +29,19 @@ pub struct PipelineCreateInfo<'a> {
     pub image_format: vk::Format,
     pub extent: vk::Extent2D,
     pub multisampling: PipelineMultisamplingInfo,
+    pub rasterization_options: &'a RasterizationOptions,
+}
+
+pub struct RasterizationOptions {
+    pub cull_mode: vk::CullModeFlags,
+}
+
+impl Default for RasterizationOptions {
+    fn default() -> Self {
+        RasterizationOptions {
+            cull_mode: vk::CullModeFlags::BACK
+        }
+    }
 }
 
 pub struct PipelineMultisamplingInfo {

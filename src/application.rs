@@ -21,7 +21,7 @@ impl Application {
             .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
             .build(event_loop)
             .expect("Failed to create window."));
-        let engine = EtnaEngine::new(window.clone());
+        let engine = EtnaEngine::new(window.clone(), event_loop);
 
         Application {
             _window: window,
@@ -31,6 +31,12 @@ impl Application {
 
     pub fn main_loop(mut self, event_loop: EventLoop<()>) {
         event_loop.run(move |event, _, control_flow| {
+            if let Event::WindowEvent {
+                event,
+                ..
+            } = &event {
+                self.etna_engine.handle_window_event(event);
+            };
             match event {
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,

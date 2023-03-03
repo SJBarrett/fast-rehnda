@@ -23,7 +23,7 @@ vec4 unpack_color(uint color) {
 vec4 position_from_screen(vec2 screen_position) {
     return vec4(
         2 * screen_position.x / constants.screen_size.x - 1,
-        1 - 2 * screen_position.y / constants.screen_size.y,
+        2 * screen_position.y / constants.screen_size.y - 1,
         0.0,
         1.0
     );

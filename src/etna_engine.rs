@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use winit::event::WindowEvent;
+use winit::event_loop::EventLoopWindowTarget;
 
 use crate::etna;
 use crate::etna::{CommandPool, Device, PhysicalDevice, Swapchain, SwapchainError};
@@ -13,11 +15,11 @@ use crate::ui::RehndaUi;
 pub struct EtnaEngine {
     // sync objects above here
     scene: Scene,
-    command_pool: etna::CommandPool,
+    command_pool: CommandPool,
     frame_renderer: etna::FrameRenderer,
     ui: RehndaUi,
     descriptor_manager: DescriptorManager,
-    swapchain: etna::Swapchain,
+    swapchain: Swapchain,
     surface: etna::Surface,
     physical_device: LongLivedObject<PhysicalDevice>,
     device: LongLivedObject<Device>,
@@ -27,7 +29,7 @@ pub struct EtnaEngine {
 }
 
 impl EtnaEngine {
-    pub fn new(window: Arc<winit::window::Window>) -> EtnaEngine {
+    pub fn new(window: Arc<winit::window::Window>, event_loop: &EventLoopWindowTarget<()>) -> EtnaEngine {
         let entry = ash::Entry::linked();
         let instance = LongLivedObject::new(etna::Instance::new(&entry));
         let surface = etna::Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
@@ -45,7 +47,7 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let ui = RehndaUi::create(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain);
+        let ui = RehndaUi::create(device.ptr(), event_loop, &physical_device.graphics_settings, &swapchain);
         let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &command_pool, &mut descriptor_manager);
@@ -71,7 +73,7 @@ impl EtnaEngine {
         if self.is_minimized() {
             return;
         }
-        self.ui.run(egui::RawInput::default());
+        self.ui.update_ui_state(&self.window);
         Self::update_scene(&mut self.scene);
         let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.scene, &mut self.ui.egui_renderer);
         match draw_result {
@@ -90,6 +92,10 @@ impl EtnaEngine {
                 self.scene.camera.update_aspect_ratio(self.swapchain.aspect_ratio());
             }
         }
+    }
+
+    pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
+        self.ui.handle_window_event(window_event);
     }
 
     fn update_scene(scene: &mut Scene) {

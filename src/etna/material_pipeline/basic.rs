@@ -6,7 +6,7 @@ use ash::vk;
 
 use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::etna::{Device, GraphicsSettings, Swapchain};
-use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription};
+use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
 use crate::scene::{Vertex};
 
@@ -51,6 +51,7 @@ pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Desc
         image_format: swapchain.image_format,
         vertex_input,
         multisampling,
+        rasterization_options: &RasterizationOptions::default(),
     };
 
     MaterialPipeline::create(device, &create_info)
@@ -96,6 +97,7 @@ pub fn non_textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut 
         image_format: swapchain.image_format,
         vertex_input,
         multisampling,
+        rasterization_options: &RasterizationOptions::default(),
     };
 
     MaterialPipeline::create(device, &create_info)
