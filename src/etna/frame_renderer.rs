@@ -9,7 +9,7 @@ use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
 use crate::ui::EguiRenderer;
 
-const MAX_FRAMES_IN_FLIGHT: usize = 1;
+const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 pub struct FrameRenderer {
     device: ConstPtr<Device>,

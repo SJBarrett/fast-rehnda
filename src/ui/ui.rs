@@ -81,6 +81,7 @@ pub struct EguiRenderer {
     ui_meshes: Vec<UiMesh>,
     pipeline: MaterialPipeline,
     screen_state: ScreenState,
+    mesh_destroy_queue: Vec<HostMappedBuffer>,
 }
 
 struct UiMesh {
@@ -104,10 +105,12 @@ impl EguiRenderer {
                 size_in_pixels: [1, 1],
                 pixels_per_point: 1.0,
             },
+            mesh_destroy_queue: Vec::new(),
         }
     }
 
     pub fn update_resources(&mut self) {
+        self.mesh_destroy_queue.clear();
         for (i, clipped_primitive) in self.clipped_primitives.iter().enumerate() {
             match &clipped_primitive.primitive {
                 Primitive::Mesh(mesh) => {
@@ -130,16 +133,21 @@ impl EguiRenderer {
                         });
                     } else {
                         if self.ui_meshes.get(i).unwrap().vertex_buffer.size() < required_vertex_buffer_size {
-                            self.ui_meshes.get_mut(i).unwrap().vertex_buffer = HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
+                            let mut new_buffer =  HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
                                 size: required_vertex_buffer_size,
                                 usage: vk::BufferUsageFlags::VERTEX_BUFFER,
                             });
+
+                            std::mem::swap(&mut self.ui_meshes.get_mut(i).unwrap().vertex_buffer, &mut new_buffer);
+                            self.mesh_destroy_queue.push(new_buffer);
                         }
                         if self.ui_meshes.get(i).unwrap().index_buffer.size() < required_vertex_buffer_size {
-                            self.ui_meshes.get_mut(i).unwrap().index_buffer = HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
+                            let mut new_buffer = HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
                                 size: required_index_buffer_size,
                                 usage: vk::BufferUsageFlags::INDEX_BUFFER,
                             });
+                            std::mem::swap(&mut self.ui_meshes.get_mut(i).unwrap().index_buffer, &mut new_buffer);
+                            self.mesh_destroy_queue.push(new_buffer);
                         }
                     }
 
