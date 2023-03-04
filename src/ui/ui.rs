@@ -4,7 +4,7 @@ use std::path::Path;
 use ahash::AHashMap;
 
 use ash::vk;
-use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureFilter, TextureId, TextureOptions, TexturesDelta};
+use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureFilter, TextureId, TextureOptions, TexturesDelta, Visuals};
 use egui::epaint::{Primitive, Vertex};
 use memoffset::offset_of;
 use winit::event::WindowEvent;
@@ -13,7 +13,7 @@ use winit::event_loop::EventLoopWindowTarget;
 use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, Swapchain, Texture, TextureCreateInfo, TextureFilteringOptions};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
-use crate::rehnda_core::{ConstPtr, Vec2};
+use crate::rehnda_core::{ConstPtr};
 
 pub struct RehndaUi {
     egui_ctx: egui::Context,
@@ -22,9 +22,15 @@ pub struct RehndaUi {
     pub egui_renderer: EguiRenderer,
 }
 
-pub struct ScreenState {
-    pub size_in_pixels: [u32; 2],
-    pub pixels_per_point: f32,
+struct ScreenState {
+    size_in_pixels: [u32; 2],
+    pixels_per_point: f32,
+}
+
+impl ScreenState {
+    fn size_in_points(&self) -> [f32; 2] {
+        [self.size_in_pixels[0] as f32 / self.pixels_per_point, self.size_in_pixels[1] as f32 / self.pixels_per_point]
+    }
 }
 
 struct UiState {
@@ -34,9 +40,11 @@ struct UiState {
 
 impl RehndaUi {
     pub fn create(device: ConstPtr<Device>, event_loop: &EventLoopWindowTarget<()>, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> Self {
+        let egui_ctx = egui::Context::default();
+
         RehndaUi {
             winit_integration: egui_winit::State::new(event_loop),
-            egui_ctx: egui::Context::default(),
+            egui_ctx,
             ui_state: UiState {
                 name: "empty".to_string(),
                 age: 1,
@@ -54,15 +62,15 @@ impl RehndaUi {
         let new_input = self.winit_integration.take_egui_input(window);
         let full_output = self.egui_ctx.run(new_input, |egui_ctx| {
             egui::Window::new("My window").show(egui_ctx, |ui| {
-                // ui.heading("My egui Application");
-                // ui.horizontal(|ui| {
-                //     ui.label("Your name: ");
-                //     ui.text_edit_singleline(&mut self.ui_state.name);
-                // });
+                ui.heading("My egui Application");
+                ui.horizontal(|ui| {
+                    ui.label("Your name: ");
+                    ui.text_edit_singleline(&mut self.ui_state.name);
+                });
                 ui.add(egui::Slider::new(&mut self.ui_state.age, 0..=120).text("age"));
-                // if ui.button("Click each year").clicked() {
-                //     self.ui_state.age += 1;
-                // }
+                if ui.button("Click each year").clicked() {
+                    self.ui_state.age += 1;
+                }
                 ui.label(format!("Hello '{}', age {}", self.ui_state.name, self.ui_state.age));
             });
         });
@@ -245,9 +253,8 @@ impl EguiRenderer {
                 device.cmd_bind_index_buffer(command_buffer, ui_mesh.index_buffer.vk_buffer(), 0, vk::IndexType::UINT32);
                 let descriptor_sets = &[self.textures.get(&ui_mesh.texture_id).unwrap().descriptor_set];
                 device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout, 0, descriptor_sets, &[]);
-                // TODO actually calculate screen size
-                let screen_size = &[Vec2::new(swapchain.extent.width as f32, swapchain.extent.height as f32)];
-                let screen_size_data: &[u8] = bytemuck::cast_slice(screen_size);
+                let screen_size = self.egui_output.screen_state.size_in_points();
+                let screen_size_data: &[u8] = bytemuck::cast_slice(&screen_size);
                 device.cmd_push_constants(command_buffer, self.pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, screen_size_data);
 
                 device.cmd_draw_indexed(command_buffer, ui_mesh.index_count, 1, 0, 0, 0);

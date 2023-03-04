@@ -180,7 +180,7 @@ fn cmd_begin_rendering(device: &Device, swapchain: &Swapchain, command_buffer: v
     });
     let clear_color = vk::ClearValue {
         color: vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 1.0]
+            float32: [0.52, 0.8, 0.92, 1.0]
         }
     };
     let color_attachment_info = if swapchain.msaa_enabled {
