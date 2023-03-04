@@ -6,6 +6,7 @@ use ahash::AHashMap;
 use ash::vk;
 use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureFilter, TextureId, TextureOptions, TexturesDelta, Visuals};
 use egui::epaint::{Primitive, Vertex};
+use log::info;
 use memoffset::offset_of;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
@@ -95,6 +96,7 @@ pub struct EguiRenderer {
     texture_free_queue: Vec<Texture>,
     ui_meshes: Vec<UiMesh>,
     mesh_destroy_queue: Vec<HostMappedBuffer>,
+    ui_mesh_destroy_queue: Vec<UiMesh>,
 }
 
 struct EguiOutput {
@@ -130,6 +132,7 @@ impl EguiRenderer {
             mesh_destroy_queue: Vec::new(),
             textures: AHashMap::new(),
             texture_free_queue: Vec::new(),
+            ui_mesh_destroy_queue: Vec::new(),
         }
     }
 
@@ -157,10 +160,12 @@ impl EguiRenderer {
 
     pub fn update_resources(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool) {
         self.mesh_destroy_queue.clear();
+        self.ui_mesh_destroy_queue.clear();
         self.texture_free_queue.clear();
         for (texture_id, image_delta) in self.egui_output.texture_delta.set.iter() {
             if let Some(po) = image_delta.pos {
                 // TODO copy new data
+                info!("Changed image");
             } else {
                 match &image_delta.image {
                     ImageData::Color(color_image) => {
@@ -224,6 +229,12 @@ impl EguiRenderer {
                     mesh_ref.clip_rect = self.egui_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect);
                 }
                 Primitive::Callback(_) => panic!("Expected no egui callbacks"),
+            }
+        }
+
+        if self.egui_output.clipped_primitives.len() < self.ui_meshes.len() {
+            for _ in 0..(self.ui_meshes.len() - self.egui_output.clipped_primitives.len()) {
+                self.ui_mesh_destroy_queue.push(self.ui_meshes.pop().unwrap());
             }
         }
 
