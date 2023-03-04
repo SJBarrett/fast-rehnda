@@ -366,7 +366,7 @@ fn egui_vertex_descriptions() -> Vec<vk::VertexInputAttributeDescription> {
         vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
-            .format(vk::Format::R32_UINT)
+            .format(vk::Format::R8G8B8A8_UNORM)
             .offset(offset_of!(Vertex, color) as u32)
             .build(),
     ]
