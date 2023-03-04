@@ -17,7 +17,7 @@ pub struct EtnaEngine {
     scene: Scene,
     command_pool: CommandPool,
     frame_renderer: etna::FrameRenderer,
-    ui: UiRunner,
+    ui_runner: UiRunner,
     descriptor_manager: DescriptorManager,
     swapchain: Swapchain,
     surface: etna::Surface,
@@ -47,7 +47,7 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let ui = UiRunner::create(device.ptr(), event_loop, &physical_device.graphics_settings, &swapchain);
+        let ui_runner = UiRunner::create(device.ptr(), event_loop, &physical_device.graphics_settings, &swapchain);
         let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &command_pool, &mut descriptor_manager);
@@ -57,7 +57,7 @@ impl EtnaEngine {
             _entry: entry,
             _instance: instance,
             descriptor_manager,
-            ui,
+            ui_runner,
             surface,
             physical_device,
             device,
@@ -73,9 +73,9 @@ impl EtnaEngine {
         if self.is_minimized() {
             return;
         }
-        self.ui.update_ui_state(&self.window);
+        self.ui_runner.update_ui_state(&self.window, &mut self.scene);
         Self::update_scene(&mut self.scene);
-        let draw_result = self.frame_renderer.draw_frame(&self.physical_device, &self.command_pool, &self.swapchain, &self.scene, &mut self.ui.egui_renderer);
+        let draw_result = self.frame_renderer.draw_frame(&self.physical_device, &self.command_pool, &self.swapchain, &self.scene, &mut self.ui_runner.painter);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
@@ -95,7 +95,7 @@ impl EtnaEngine {
     }
 
     pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
-        self.ui.handle_window_event(window_event);
+        self.ui_runner.handle_window_event(window_event);
     }
 
     fn update_scene(scene: &mut Scene) {
