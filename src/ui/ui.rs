@@ -214,11 +214,14 @@ impl EguiRenderer {
                         }
                     }
 
+                    let mut mesh_ref = self.ui_meshes.get_mut(i).unwrap();
+
                     let vertex_data: &[u8] = bytemuck::cast_slice(mesh.vertices.as_slice());
-                    self.ui_meshes.get(i).unwrap().vertex_buffer.write_data(vertex_data);
+                    mesh_ref.vertex_buffer.write_data(vertex_data);
                     let index_data: &[u8] = bytemuck::cast_slice(mesh.indices.as_slice());
-                    self.ui_meshes.get(i).unwrap().index_buffer.write_data(index_data);
-                    self.ui_meshes.get_mut(i).unwrap().index_count = mesh.indices.len() as _;
+                    mesh_ref.index_buffer.write_data(index_data);
+                    mesh_ref.index_count = mesh.indices.len() as _;
+                    mesh_ref.clip_rect = self.egui_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect);
                 }
                 Primitive::Callback(_) => panic!("Expected no egui callbacks"),
             }
