@@ -23,18 +23,46 @@ impl Drop for Texture {
     }
 }
 
+pub struct TextureCreateInfo<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub mip_levels: Option<u32>,
+    pub data: &'a [u8],
+    pub texture_filtering: &'a TextureFilteringOptions,
+}
+
+pub struct TextureFilteringOptions {
+    pub mag_filter: vk::Filter,
+    pub min_filter: vk::Filter,
+}
+
 impl Texture {
-    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path, descriptor_manager: &mut DescriptorManager) -> Texture {
+    pub fn create_from_image_file(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path, descriptor_manager: &mut DescriptorManager) -> Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
-        let src_buffer = Buffer::create_buffer_with_data(device, BufferCreateInfo {
-            data: rgba_img.as_bytes(),
-            usage: vk::BufferUsageFlags::TRANSFER_SRC
-        });
-        let mip_levels = (rgba_img.width().max(rgba_img.height())).ilog2() + 1;
-        let image = Image::create_image(device, &ImageCreateInfo {
+        let create_info = TextureCreateInfo {
             width: rgba_img.width(),
             height: rgba_img.height(),
+            data: rgba_img.as_bytes(),
+            mip_levels: Some((rgba_img.width().max(rgba_img.height())).ilog2() + 1),
+            texture_filtering: &TextureFilteringOptions {
+                mag_filter: vk::Filter::LINEAR,
+                min_filter: vk::Filter::LINEAR,
+            },
+        };
+        Self::create(device, physical_device, command_pool, descriptor_manager, &create_info)
+    }
+
+    pub fn create(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, create_info: &TextureCreateInfo) -> Texture {
+        let command_buffer = command_pool.one_time_command_buffer();
+        let mip_levels = create_info.mip_levels.unwrap_or(1);
+        let src_buffer = Buffer::create_buffer_with_data(device, BufferCreateInfo {
+            data: create_info.data,
+            usage: vk::BufferUsageFlags::TRANSFER_SRC
+        });
+        let image = Image::create_image(device, &ImageCreateInfo {
+            width: create_info.width,
+            height: create_info.height,
             mip_levels,
             format: vk::Format::R8G8B8A8_SRGB,
             tiling: vk::ImageTiling::OPTIMAL,
@@ -44,8 +72,6 @@ impl Texture {
             num_samples: vk::SampleCountFlags::TYPE_1,
         });
 
-
-        let command_buffer = command_pool.one_time_command_buffer();
         image_transitions::transition_image_layout(&device, &command_buffer, image.vk_image, &image_transitions::TransitionProps::undefined_to_transfer_dst(mip_levels));
 
         // let command_buffer = command_pool.one_time_command_buffer();
@@ -65,8 +91,8 @@ impl Texture {
                 z: 0,
             })
             .image_extent(vk::Extent3D {
-                width: rgba_img.width(),
-                height: rgba_img.height(),
+                width: create_info.width,
+                height: create_info.height,
                 depth: 1,
             })
             .build();
@@ -74,11 +100,11 @@ impl Texture {
 
         unsafe { device.cmd_copy_buffer_to_image(*command_buffer, src_buffer.buffer, image.vk_image, vk::ImageLayout::TRANSFER_DST_OPTIMAL, copy_regions) };
 
-        Self::generate_mipmaps(&device, physical_device, &image, rgba_img.width(), rgba_img.height(), mip_levels, *command_buffer);
+        Self::generate_mipmaps(&device, physical_device, &image, create_info.width, create_info.height, mip_levels, *command_buffer);
 
         let sampler_create_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
+            .mag_filter(create_info.texture_filtering.mag_filter)
+            .min_filter(create_info.texture_filtering.min_filter)
             .address_mode_u(vk::SamplerAddressMode::REPEAT)
             .address_mode_v(vk::SamplerAddressMode::REPEAT)
             .address_mode_w(vk::SamplerAddressMode::REPEAT)
@@ -109,7 +135,7 @@ impl Texture {
             .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
             .build()
             .expect("Failed to allocate bindings");
-
+        drop(command_buffer);
         Texture {
             device,
             image,

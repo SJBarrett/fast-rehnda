@@ -1,18 +1,19 @@
 use std::ffi::CString;
 use std::mem::size_of;
 use std::path::Path;
+use ahash::AHashMap;
+
 use ash::vk;
-use egui::{ClippedPrimitive, Rect, TextureId};
+use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureFilter, TextureId, TextureOptions, TexturesDelta};
 use egui::epaint::{Primitive, Vertex};
 use memoffset::offset_of;
-use winit::dpi::PhysicalSize;
-use winit::event::{Event, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
-use crate::etna::shader::ShaderModule;
-use crate::etna::{Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Swapchain};
-use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
-use crate::rehnda_core::{ConstPtr, Vec2};
 
+use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, Swapchain, Texture, TextureCreateInfo, TextureFilteringOptions};
+use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
+use crate::etna::shader::ShaderModule;
+use crate::rehnda_core::{ConstPtr, Vec2};
 
 pub struct RehndaUi {
     egui_ctx: egui::Context,
@@ -66,10 +67,13 @@ impl RehndaUi {
             });
         });
         self.winit_integration.handle_platform_output(window, &self.egui_ctx, full_output.platform_output);
-        self.egui_renderer.clipped_primitives = self.egui_ctx.tessellate(full_output.shapes);
-        self.egui_renderer.screen_state = ScreenState {
-            size_in_pixels: [window.inner_size().width, window.inner_size().height],
-            pixels_per_point: self.egui_ctx.pixels_per_point(),
+        self.egui_renderer.egui_output = EguiOutput {
+            clipped_primitives: self.egui_ctx.tessellate(full_output.shapes),
+            texture_delta: full_output.textures_delta,
+            screen_state: ScreenState {
+                size_in_pixels: [window.inner_size().width, window.inner_size().height],
+                pixels_per_point: self.egui_ctx.pixels_per_point(),
+            }
         };
     }
 }
@@ -77,11 +81,18 @@ impl RehndaUi {
 pub struct EguiRenderer {
     device: ConstPtr<Device>,
     descriptor_manager: DescriptorManager,
-    clipped_primitives: Vec<ClippedPrimitive>,
-    ui_meshes: Vec<UiMesh>,
     pipeline: MaterialPipeline,
-    screen_state: ScreenState,
+    egui_output: EguiOutput,
+    textures: AHashMap<TextureId, Texture>,
+    texture_free_queue: Vec<Texture>,
+    ui_meshes: Vec<UiMesh>,
     mesh_destroy_queue: Vec<HostMappedBuffer>,
+}
+
+struct EguiOutput {
+    clipped_primitives: Vec<ClippedPrimitive>,
+    texture_delta: TexturesDelta,
+    screen_state: ScreenState,
 }
 
 struct UiMesh {
@@ -100,18 +111,61 @@ impl EguiRenderer {
             ui_meshes: Vec::new(),
             pipeline: egui_pipeline(device, &mut descriptor_manager, graphics_settings, swapchain),
             descriptor_manager,
-            clipped_primitives: Vec::new(),
-            screen_state: ScreenState {
-                size_in_pixels: [1, 1],
-                pixels_per_point: 1.0,
+            egui_output: EguiOutput {
+                clipped_primitives: Vec::new(),
+                screen_state: ScreenState {
+                    size_in_pixels: [1, 1],
+                    pixels_per_point: 1.0,
+                },
+                texture_delta: TexturesDelta::default(),
             },
             mesh_destroy_queue: Vec::new(),
+            textures: AHashMap::new(),
+            texture_free_queue: Vec::new(),
         }
     }
 
-    pub fn update_resources(&mut self) {
+    fn create_ui_texture(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, physical_device: &PhysicalDevice, command_pool: &CommandPool, size: &[usize; 2], texture_options: &TextureOptions, data: &[u8]) -> Texture {
+        Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+            width: size[0] as _,
+            height: size[1] as _,
+            mip_levels: None,
+            data,
+            texture_filtering: &TextureFilteringOptions {
+                mag_filter: match texture_options.magnification {
+                    TextureFilter::Linear => vk::Filter::LINEAR,
+                    TextureFilter::Nearest => vk::Filter::NEAREST,
+                },
+                min_filter: match texture_options.magnification {
+                    TextureFilter::Linear => vk::Filter::LINEAR,
+                    TextureFilter::Nearest => vk::Filter::NEAREST,
+                },
+            }
+        })
+    }
+
+    pub fn update_resources(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool) {
         self.mesh_destroy_queue.clear();
-        for (i, clipped_primitive) in self.clipped_primitives.iter().enumerate() {
+        self.texture_free_queue.clear();
+        for (texture_id, image_delta) in self.egui_output.texture_delta.set.iter() {
+            if let Some(po) = image_delta.pos {
+                // TODO copy new data
+            } else {
+                match &image_delta.image {
+                    ImageData::Color(color_image) => {
+                        self.textures.insert(*texture_id, Self::create_ui_texture(self.device, &mut self.descriptor_manager, physical_device, command_pool, &color_image.size, &image_delta.options, bytemuck::cast_slice(color_image.pixels.as_slice())));
+                    },
+                    ImageData::Font(font_image) => {
+                        let data: Vec<Color32> = font_image.srgba_pixels(None).collect();
+                        self.textures.insert(*texture_id, Self::create_ui_texture(self.device, &mut self.descriptor_manager, physical_device, command_pool, &font_image.size, &image_delta.options, bytemuck::cast_slice(data.as_slice())));
+                    },
+                }
+
+            }
+
+        }
+
+        for (i, clipped_primitive) in self.egui_output.clipped_primitives.iter().enumerate() {
             match &clipped_primitive.primitive {
                 Primitive::Mesh(mesh) => {
                     let required_vertex_buffer_size = (mesh.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
@@ -129,7 +183,7 @@ impl EguiRenderer {
                             }),
                             index_count: mesh.indices.len() as _,
                             texture_id: mesh.texture_id,
-                            clip_rect: self.screen_state.get_clip_rect(&clipped_primitive.clip_rect),
+                            clip_rect: self.egui_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect),
                         });
                     } else {
                         if self.ui_meshes.get(i).unwrap().vertex_buffer.size() < required_vertex_buffer_size {
@@ -160,6 +214,10 @@ impl EguiRenderer {
                 Primitive::Callback(_) => panic!("Expected no egui callbacks"),
             }
         }
+
+        for texture_id in self.egui_output.texture_delta.free.iter() {
+            self.textures.remove(texture_id).unwrap();
+        }
     }
 
     pub fn draw(&self, device: &Device, swapchain: &Swapchain, command_buffer: vk::CommandBuffer) {
@@ -185,6 +243,8 @@ impl EguiRenderer {
             unsafe {
                 device.cmd_bind_vertex_buffers(command_buffer, 0, vert_buffers, offsets);
                 device.cmd_bind_index_buffer(command_buffer, ui_mesh.index_buffer.vk_buffer(), 0, vk::IndexType::UINT32);
+                let descriptor_sets = &[self.textures.get(&ui_mesh.texture_id).unwrap().descriptor_set];
+                device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout, 0, descriptor_sets, &[]);
                 // TODO actually calculate screen size
                 let screen_size = &[Vec2::new(swapchain.extent.width as f32, swapchain.extent.height as f32)];
                 let screen_size_data: &[u8] = bytemuck::cast_slice(screen_size);
@@ -230,6 +290,7 @@ impl ScreenState {
 }
 
 fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> MaterialPipeline {
+    let texture_binding_description = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT));
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.vert_spv"));
     let frag_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.frag_spv"));
     let main_function_name = CString::new("main").unwrap();
@@ -263,7 +324,7 @@ fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorMa
 
     let create_info = PipelineCreateInfo {
         global_set_layouts: &[],
-        additional_descriptor_set_layouts: &[],
+        additional_descriptor_set_layouts: &[texture_binding_description],
         shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],
         push_constants: &[push_constant],
         extent: swapchain.extent,

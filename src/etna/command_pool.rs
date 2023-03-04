@@ -61,6 +61,10 @@ impl Deref for OneTimeCommandBuffer {
 }
 
 impl OneTimeCommandBuffer {
+    pub fn handle(&self) -> vk::CommandBuffer {
+        self.command_buffer
+    }
+
     fn start(device: ConstPtr<etna::Device>, owning_command_pool: vk::CommandPool) -> OneTimeCommandBuffer {
         let alloc_info = vk::CommandBufferAllocateInfo::builder()
             .level(vk::CommandBufferLevel::PRIMARY)

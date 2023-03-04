@@ -34,7 +34,7 @@ impl Model {
     pub fn load_textured_obj(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, obj_path: &Path, texture_path: &Path) -> Model {
         let (index_count, vertex_buffer, index_buffer) = Self::load_obj_vertices_and_indices(device, command_pool, obj_path);
 
-        let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
+        let texture = Texture::create_from_image_file(device, physical_device, command_pool, texture_path, descriptor_manager);
         Model {
             vertex_buffer,
             index_buffer,
@@ -113,7 +113,7 @@ impl Model {
             usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
         });
 
-        let texture = Texture::create(device, physical_device, command_pool, texture_path, descriptor_manager);
+        let texture = Texture::create_from_image_file(device, physical_device, command_pool, texture_path, descriptor_manager);
 
         Model {
             vertex_buffer,

@@ -75,7 +75,7 @@ impl EtnaEngine {
         }
         self.ui.update_ui_state(&self.window);
         Self::update_scene(&mut self.scene);
-        let draw_result = self.frame_renderer.draw_frame(&self.swapchain, &self.scene, &mut self.ui.egui_renderer);
+        let draw_result = self.frame_renderer.draw_frame(&self.physical_device, &self.command_pool, &self.swapchain, &self.scene, &mut self.ui.egui_renderer);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {
