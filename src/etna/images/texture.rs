@@ -28,12 +28,7 @@ pub struct TextureCreateInfo<'a> {
     pub height: u32,
     pub mip_levels: Option<u32>,
     pub data: &'a [u8],
-    pub texture_filtering: &'a TextureFilteringOptions,
-}
-
-pub struct TextureFilteringOptions {
-    pub mag_filter: vk::Filter,
-    pub min_filter: vk::Filter,
+    pub sampler_info: Option<vk::SamplerCreateInfo>,
 }
 
 impl Texture {
@@ -45,10 +40,7 @@ impl Texture {
             height: rgba_img.height(),
             data: rgba_img.as_bytes(),
             mip_levels: Some((rgba_img.width().max(rgba_img.height())).ilog2() + 1),
-            texture_filtering: &TextureFilteringOptions {
-                mag_filter: vk::Filter::LINEAR,
-                min_filter: vk::Filter::LINEAR,
-            },
+            sampler_info: None,
         };
         Self::create(device, physical_device, command_pool, descriptor_manager, &create_info)
     }
@@ -58,7 +50,7 @@ impl Texture {
         let mip_levels = create_info.mip_levels.unwrap_or(1);
         let src_buffer = Buffer::create_buffer_with_data(device, BufferCreateInfo {
             data: create_info.data,
-            usage: vk::BufferUsageFlags::TRANSFER_SRC
+            usage: vk::BufferUsageFlags::TRANSFER_SRC,
         });
         let image = Image::create_image(device, &ImageCreateInfo {
             width: create_info.width,
@@ -102,27 +94,30 @@ impl Texture {
 
         Self::generate_mipmaps(&device, physical_device, &image, create_info.width, create_info.height, mip_levels, *command_buffer);
 
-        let sampler_create_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(create_info.texture_filtering.mag_filter)
-            .min_filter(create_info.texture_filtering.min_filter)
-            .address_mode_u(vk::SamplerAddressMode::REPEAT)
-            .address_mode_v(vk::SamplerAddressMode::REPEAT)
-            .address_mode_w(vk::SamplerAddressMode::REPEAT)
-            // only use anisotropy if the feature is enabled
-            .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
-            .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
-                physical_device.device_properties.limits.max_sampler_anisotropy
-            } else {
-                1.0
-            })
-            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-            .unnormalized_coordinates(false)
-            .compare_enable(false)
-            .compare_op(vk::CompareOp::ALWAYS)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .min_lod(0.0)
-            .max_lod(mip_levels as f32)
-            .mip_lod_bias(0.0);
+        let sampler_create_info = create_info.sampler_info.unwrap_or_else(||
+            vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::REPEAT)
+                .address_mode_v(vk::SamplerAddressMode::REPEAT)
+                .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                // only use anisotropy if the feature is enabled
+                .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
+                .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
+                    physical_device.device_properties.limits.max_sampler_anisotropy
+                } else {
+                    1.0
+                })
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .min_lod(0.0)
+                .max_lod(mip_levels as f32)
+                .mip_lod_bias(0.0)
+                .build()
+        );
 
         let sampler = unsafe { device.create_sampler(&sampler_create_info, None) }
             .expect("Failed to create sampler for Texture");

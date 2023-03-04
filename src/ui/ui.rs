@@ -10,7 +10,7 @@ use memoffset::offset_of;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
 
-use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, Swapchain, Texture, TextureCreateInfo, TextureFilteringOptions};
+use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, Swapchain, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
 use crate::rehnda_core::{ConstPtr};
@@ -81,7 +81,7 @@ impl RehndaUi {
             screen_state: ScreenState {
                 size_in_pixels: [window.inner_size().width, window.inner_size().height],
                 pixels_per_point: self.egui_ctx.pixels_per_point(),
-            }
+            },
         };
     }
 }
@@ -89,7 +89,7 @@ impl RehndaUi {
 pub struct EguiRenderer {
     device: ConstPtr<Device>,
     descriptor_manager: DescriptorManager,
-    pipeline: MaterialPipeline,
+    pipeline: UiPipeline,
     egui_output: EguiOutput,
     textures: AHashMap<TextureId, Texture>,
     texture_free_queue: Vec<Texture>,
@@ -139,16 +139,19 @@ impl EguiRenderer {
             height: size[1] as _,
             mip_levels: None,
             data,
-            texture_filtering: &TextureFilteringOptions {
-                mag_filter: match texture_options.magnification {
-                    TextureFilter::Linear => vk::Filter::LINEAR,
-                    TextureFilter::Nearest => vk::Filter::NEAREST,
-                },
-                min_filter: match texture_options.magnification {
-                    TextureFilter::Linear => vk::Filter::LINEAR,
-                    TextureFilter::Nearest => vk::Filter::NEAREST,
-                },
-            }
+            sampler_info: Some(
+                vk::SamplerCreateInfo::builder()
+                    .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .anisotropy_enable(false)
+                    .min_filter(vk::Filter::LINEAR)
+                    .mag_filter(vk::Filter::LINEAR)
+                    .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                    .min_lod(0.0)
+                    .max_lod(vk::LOD_CLAMP_NONE)
+                    .build()
+            ),
         })
     }
 
@@ -162,15 +165,13 @@ impl EguiRenderer {
                 match &image_delta.image {
                     ImageData::Color(color_image) => {
                         self.textures.insert(*texture_id, Self::create_ui_texture(self.device, &mut self.descriptor_manager, physical_device, command_pool, &color_image.size, &image_delta.options, bytemuck::cast_slice(color_image.pixels.as_slice())));
-                    },
+                    }
                     ImageData::Font(font_image) => {
                         let data: Vec<Color32> = font_image.srgba_pixels(None).collect();
                         self.textures.insert(*texture_id, Self::create_ui_texture(self.device, &mut self.descriptor_manager, physical_device, command_pool, &font_image.size, &image_delta.options, bytemuck::cast_slice(data.as_slice())));
-                    },
+                    }
                 }
-
             }
-
         }
 
         for (i, clipped_primitive) in self.egui_output.clipped_primitives.iter().enumerate() {
@@ -195,7 +196,7 @@ impl EguiRenderer {
                         });
                     } else {
                         if self.ui_meshes.get(i).unwrap().vertex_buffer.size() < required_vertex_buffer_size {
-                            let mut new_buffer =  HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
+                            let mut new_buffer = HostMappedBuffer::create(self.device, HostMappedBufferCreateInfo {
                                 size: required_vertex_buffer_size,
                                 usage: vk::BufferUsageFlags::VERTEX_BUFFER,
                             });
@@ -230,7 +231,7 @@ impl EguiRenderer {
 
     pub fn draw(&self, device: &Device, swapchain: &Swapchain, command_buffer: vk::CommandBuffer) {
         // bind the pipeline
-        unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.graphics_pipeline()); }
+        unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline); }
         let viewport = [vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
@@ -242,7 +243,7 @@ impl EguiRenderer {
         unsafe { device.cmd_set_viewport(command_buffer, 0, &viewport); }
 
 
-        for ui_mesh in self.ui_meshes.iter().rev() {
+        for ui_mesh in self.ui_meshes.iter() {
             let scissor = [ui_mesh.clip_rect];
             unsafe { device.cmd_set_scissor(command_buffer, 0, &scissor); }
             // bind mesh data
@@ -264,7 +265,7 @@ impl EguiRenderer {
 }
 
 impl ScreenState {
-    fn get_clip_rect(&self, egui_clip: & Rect) -> vk::Rect2D {
+    fn get_clip_rect(&self, egui_clip: &Rect) -> vk::Rect2D {
         // Transform clip rect to physical pixels:
         let clip_min_x = self.pixels_per_point * egui_clip.min.x;
         let clip_min_y = self.pixels_per_point * egui_clip.min.y;
@@ -296,7 +297,7 @@ impl ScreenState {
     }
 }
 
-fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> MaterialPipeline {
+fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> UiPipeline {
     let texture_binding_description = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT));
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.vert_spv"));
     let frag_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.frag_spv"));
@@ -340,10 +341,10 @@ fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorMa
         multisampling,
         rasterization_options: &RasterizationOptions {
             cull_mode: vk::CullModeFlags::NONE,
-        }
+        },
     };
 
-    MaterialPipeline::create(device, &create_info)
+    create_ui_pipeline(device, &create_info)
 }
 
 fn egui_vertex_descriptions() -> Vec<vk::VertexInputAttributeDescription> {
@@ -378,4 +379,128 @@ fn egui_binding_description() -> vk::VertexInputBindingDescription {
         .stride(size_of::<Vertex>() as u32)
         .input_rate(vk::VertexInputRate::VERTEX)
         .build()
+}
+
+pub struct UiPipeline {
+    device: ConstPtr<Device>,
+    pub pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+}
+
+impl Drop for UiPipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_pipeline(self.pipeline, None);
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            // layouts are destroyed by the layout cache
+        }
+    }
+}
+
+pub fn create_ui_pipeline(device: ConstPtr<Device>, create_info: &PipelineCreateInfo) -> UiPipeline {
+    let vertex_input_ci = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(create_info.vertex_input.bindings)
+        .vertex_attribute_descriptions(create_info.vertex_input.attributes);
+
+    // let us change viewport and scissor state without rebuilding the pipeline
+    let input_assembly_ci = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+
+    let viewport = vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(create_info.extent.width as f32)
+        .height(create_info.extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0);
+    let viewports = &[viewport.build()];
+
+    let scissor = vk::Rect2D::builder()
+        .offset(vk::Offset2D { x: 0, y: 0 })
+        .extent(create_info.extent);
+    let scissors = &[scissor.build()];
+
+    let viewport_state_ci = vk::PipelineViewportStateCreateInfo::builder()
+        .viewports(viewports)
+        .scissors(scissors);
+
+    let dynamic_state_ci = vk::PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
+
+    let rasterization_ci = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .cull_mode(vk::CullModeFlags::NONE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false)
+        .line_width(1.0);
+
+    let multisample_state_ci = vk::PipelineMultisampleStateCreateInfo::builder()
+        .rasterization_samples(create_info.multisampling.msaa_samples.to_sample_count_flags())
+        .sample_shading_enable(create_info.multisampling.enable_sample_rate_shading)
+        .min_sample_shading(if create_info.multisampling.enable_sample_rate_shading { 0.2 } else { 1.0 }) // closer to 1 is smoother
+        .alpha_to_coverage_enable(false)
+        .alpha_to_one_enable(false);
+
+    let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
+        .color_write_mask(vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B | vk::ColorComponentFlags::A)
+        .blend_enable(true)
+        .src_color_blend_factor(vk::BlendFactor::ONE)
+        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA);
+    let color_blend_attachments = &[color_blend_attachment.build()];
+
+    let color_blend_state_ci = vk::PipelineColorBlendStateCreateInfo::builder()
+        .attachments(color_blend_attachments);
+    // stencil op
+    let stencil_op = vk::StencilOpState::builder()
+        .fail_op(vk::StencilOp::KEEP)
+        .pass_op(vk::StencilOp::KEEP)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .build();
+    let depth_stencil_ci = vk::PipelineDepthStencilStateCreateInfo::builder()
+        .depth_test_enable(true)
+        .depth_write_enable(true)
+        .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+        .depth_bounds_test_enable(false)
+        .stencil_test_enable(false)
+        .front(stencil_op)
+        .back(stencil_op);
+
+    let color_attachment_formats = &[create_info.image_format];
+    let mut pipeline_rendering_create_info = vk::PipelineRenderingCreateInfo::builder()
+        .color_attachment_formats(color_attachment_formats)
+        .depth_attachment_format(vk::Format::D32_SFLOAT); // TODO don't assume this format
+
+    let set_layouts: Vec<vk::DescriptorSetLayout> = [create_info.global_set_layouts, create_info.additional_descriptor_set_layouts].concat();
+    let pipeline_layout_ci = vk::PipelineLayoutCreateInfo::builder()
+        .set_layouts(set_layouts.as_slice())
+        .push_constant_ranges(create_info.push_constants);
+
+    let pipeline_layout = unsafe { device.create_pipeline_layout(&pipeline_layout_ci, None) }
+        .expect("Failed to create pipline layout");
+
+    let pipeline_ci = vk::GraphicsPipelineCreateInfo::builder()
+        .stages(create_info.shader_stages)
+        .vertex_input_state(&vertex_input_ci)
+        .input_assembly_state(&input_assembly_ci)
+        .viewport_state(&viewport_state_ci)
+        .rasterization_state(&rasterization_ci)
+        .multisample_state(&multisample_state_ci)
+        .color_blend_state(&color_blend_state_ci)
+        .dynamic_state(&dynamic_state_ci)
+        .layout(pipeline_layout)
+        .render_pass(vk::RenderPass::null())
+        .push_next(&mut pipeline_rendering_create_info)
+        .depth_stencil_state(&depth_stencil_ci)
+        .subpass(0);
+    let pipeline_create_infos = &[pipeline_ci.build()];
+    let pipeline = unsafe { device.create_graphics_pipelines(vk::PipelineCache::null(), pipeline_create_infos, None) }
+        .expect("Failed to create graphics pipeline")[0];
+
+    UiPipeline {
+        device,
+        pipeline_layout,
+        pipeline,
+    }
 }
