@@ -10,14 +10,14 @@ use crate::etna::{CommandPool, Device, PhysicalDevice, Swapchain, SwapchainError
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4};
 use crate::scene::{Scene, scene_builder};
-use crate::ui::RehndaUi;
+use crate::ui::UiRunner;
 
 pub struct EtnaEngine {
     // sync objects above here
     scene: Scene,
     command_pool: CommandPool,
     frame_renderer: etna::FrameRenderer,
-    ui: RehndaUi,
+    ui: UiRunner,
     descriptor_manager: DescriptorManager,
     swapchain: Swapchain,
     surface: etna::Surface,
@@ -47,7 +47,7 @@ impl EtnaEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let ui = RehndaUi::create(device.ptr(), event_loop, &physical_device.graphics_settings, &swapchain);
+        let ui = UiRunner::create(device.ptr(), event_loop, &physical_device.graphics_settings, &swapchain);
         let scene = scene_builder::basic_scene(device.ptr(), physical_device.ptr(), &swapchain, &mut descriptor_manager);
 
         let frame_renderer = etna::FrameRenderer::create(device.ptr(), &command_pool, &mut descriptor_manager);
