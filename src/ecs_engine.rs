@@ -7,13 +7,14 @@ use glam::{EulerRot, Quat};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::event::WindowEvent;
-use winit::event_loop::EventLoopWindowTarget;
+use winit::event_loop::{EventLoop, EventLoopWindowTarget};
 use winit::window::Window;
 
 use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4, Vec3};
 use crate::scene::{AssetManager, Camera, RenderObject};
+use crate::ui::{init_ui_resources, ui_builder_system, UiContext, UiPainter};
 
 pub struct EcsEngine {
     // sync objects above here
@@ -26,28 +27,32 @@ struct EtnaContext {
 }
 
 #[derive(Resource)]
-struct EtnaWindow {
-    window: winit::window::Window,
+pub struct EtnaWindow {
+    pub winit_window: winit::window::Window,
 }
 
 impl EtnaWindow {
     fn is_minimized(&self) -> bool {
-        self.window.inner_size().height == 0 || self.window.inner_size().width == 0
+        self.winit_window.inner_size().height == 0 || self.winit_window.inner_size().width == 0
     }
 }
 
 #[derive(SystemLabel)]
 pub struct RenderLabel;
+#[derive(SystemLabel)]
+pub struct UiLabel;
+
 
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
-        Self::initialise_rendering_resources(&mut app, window);
+        Self::initialise_rendering_resources(&mut app, window, event_loop);
         app.add_startup_system(scene_init_system);
         app.add_system_set(SystemSet::new()
             .label(RenderLabel)
             .with_run_criteria(should_render)
-            .with_system(draw_system)
+            .with_system(ui_builder_system)
+            .with_system(draw_system.after(ui_builder_system))
         );
 
         EcsEngine {
@@ -55,7 +60,7 @@ impl EcsEngine {
         }
     }
 
-    fn initialise_rendering_resources(app: &mut App, window: Window) {
+    fn initialise_rendering_resources(app: &mut App, window: Window, event_loop: &EventLoopWindowTarget<()>) {
         let entry = ash::Entry::linked();
         let instance = LongLivedObject::new(Instance::new(&entry));
         let surface = Surface::new(&entry, &instance, window.raw_display_handle(), window.raw_window_handle()).expect("Failed to create surface");
@@ -76,11 +81,17 @@ impl EcsEngine {
         let asset_manager = AssetManager::create(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family));
         let frame_renderer = FrameRenderContext::create(device.ptr(), &command_pool, &mut descriptor_manager);
 
+        // ui resources
+        let (ui_context, ui_output) = init_ui_resources(event_loop);
+        app.insert_resource(ui_context);
+        app.insert_resource(ui_output);
+        app.insert_resource(UiPainter::create(device.ptr(), &physical_device.graphics_settings, &swapchain));
+
         let etna_context = EtnaContext {
             entry,
         };
         app.insert_resource(EtnaWindow {
-            window
+            winit_window: window
         });
         app.insert_resource(etna_context);
         app.insert_resource(instance);
@@ -98,7 +109,10 @@ impl EcsEngine {
         self.app.update();
     }
 
-    pub fn handle_window_event(&mut self, window_event: &WindowEvent) {}
+    pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
+        // let mut egui_ctx = self.app.world.resource_mut::<UiContext>();
+        // let _ = egui_ctx.on_event(&window_event);
+    }
 }
 
 fn scene_init_system(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
@@ -145,6 +159,8 @@ fn should_render(window: Res<EtnaWindow>) -> ShouldRun {
 impl Drop for EcsEngine {
     fn drop(&mut self) {
         unsafe { self.app.world.resource::<LongLivedObject<Device>>().device_wait_idle().expect("Failed to wait for the device to be idle") };
+        self.app.world.remove_resource::<UiContext>();
+        self.app.world.remove_resource::<UiPainter>();
         self.app.world.remove_resource::<AssetManager>();
         self.app.world.remove_resource::<CommandPool>();
         self.app.world.remove_resource::<FrameRenderContext>();

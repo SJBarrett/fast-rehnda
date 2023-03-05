@@ -1,8 +1,8 @@
 mod rehnda_ui;
 pub use rehnda_ui::*;
 
-mod ui_runner;
-pub use ui_runner::*;
+mod ui_resources;
+pub use ui_resources::*;
 mod ui_painter;
 mod ui_pipeline;
 

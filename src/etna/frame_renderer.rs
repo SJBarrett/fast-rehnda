@@ -4,10 +4,11 @@ use std::mem::size_of;
 use ash::vk;
 use bevy_ecs::prelude::*;
 
-use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Swapchain, SwapchainResult, vkinit};
+use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
 use crate::scene::{AssetManager, Camera, MaterialHandle, Model, ModelHandle, RenderObject, ViewProjectionMatrices};
+use crate::ui::{UiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -34,7 +35,7 @@ impl Debug for FrameData {
     }
 }
 
-pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>) {
+pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, physical_device: PhysicalDeviceRes, command_pool: Res<CommandPool>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>, mut ui_painter: ResMut<UiPainter>, ui_output: Res<UiOutput>) {
     let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
     update_global_buffer(frame_data, &camera);
@@ -72,8 +73,8 @@ pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, swapchain: Re
         last_model_handle = object.model_handle;
     }
 
-    // egui_renderer.update_resources(physical_device, command_pool);
-    // egui_renderer.draw(&frame_renderer.device, swapchain, frame_data.command_buffer);
+    ui_painter.update_resources(&physical_device, &command_pool, &ui_output);
+    ui_painter.draw(&frame_renderer.device, &swapchain, frame_data.command_buffer, &ui_output);
 
     cmd_end_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
 
