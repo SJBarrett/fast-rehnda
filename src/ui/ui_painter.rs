@@ -9,7 +9,6 @@ use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostM
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::ConstPtr;
 use crate::ui::ui_pipeline::{egui_pipeline, UiPipeline};
-use crate::ui::UiOutput;
 
 #[derive(Resource)]
 pub struct UiPainter {
@@ -23,7 +22,7 @@ pub struct UiPainter {
     ui_mesh_destroy_queue: Vec<UiMesh>,
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct EguiOutput {
     pub clipped_primitives: Vec<ClippedPrimitive>,
     pub texture_delta: TexturesDelta,
@@ -75,11 +74,11 @@ impl UiPainter {
         })
     }
 
-    pub fn update_resources(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool, ui_output: &UiOutput) {
+    pub fn update_resources(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool, egui_output: &EguiOutput) {
         self.mesh_destroy_queue.clear();
         self.ui_mesh_destroy_queue.clear();
         self.texture_free_queue.clear();
-        for (texture_id, image_delta) in ui_output.run_output.texture_delta.set.iter() {
+        for (texture_id, image_delta) in egui_output.texture_delta.set.iter() {
             if let Some(po) = image_delta.pos {
                 // TODO copy new data
                 info!("Changed image");
@@ -96,7 +95,7 @@ impl UiPainter {
             }
         }
 
-        for (i, clipped_primitive) in ui_output.run_output.clipped_primitives.iter().enumerate() {
+        for (i, clipped_primitive) in egui_output.clipped_primitives.iter().enumerate() {
             match &clipped_primitive.primitive {
                 Primitive::Mesh(mesh) => {
                     let required_vertex_buffer_size = (mesh.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
@@ -114,7 +113,7 @@ impl UiPainter {
                             }),
                             index_count: mesh.indices.len() as _,
                             texture_id: mesh.texture_id,
-                            clip_rect: ui_output.run_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect),
+                            clip_rect: egui_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect),
                         });
                     } else {
                         if self.ui_meshes.get(i).unwrap().vertex_buffer.size() < required_vertex_buffer_size {
@@ -143,24 +142,24 @@ impl UiPainter {
                     let index_data: &[u8] = bytemuck::cast_slice(mesh.indices.as_slice());
                     mesh_ref.index_buffer.write_data(index_data);
                     mesh_ref.index_count = mesh.indices.len() as _;
-                    mesh_ref.clip_rect = ui_output.run_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect);
+                    mesh_ref.clip_rect = egui_output.screen_state.get_clip_rect(&clipped_primitive.clip_rect);
                 }
                 Primitive::Callback(_) => panic!("Expected no egui callbacks"),
             }
         }
 
-        if ui_output.run_output.clipped_primitives.len() < self.ui_meshes.len() {
-            for _ in 0..(self.ui_meshes.len() - ui_output.run_output.clipped_primitives.len()) {
+        if egui_output.clipped_primitives.len() < self.ui_meshes.len() {
+            for _ in 0..(self.ui_meshes.len() - egui_output.clipped_primitives.len()) {
                 self.ui_mesh_destroy_queue.push(self.ui_meshes.pop().unwrap());
             }
         }
 
-        for texture_id in ui_output.run_output.texture_delta.free.iter() {
+        for texture_id in egui_output.texture_delta.free.iter() {
             self.textures.remove(texture_id).unwrap();
         }
     }
 
-    pub fn draw(&self, device: &Device, swapchain: &Swapchain, command_buffer: vk::CommandBuffer, ui_output: &UiOutput) {
+    pub fn draw(&self, device: &Device, swapchain: &Swapchain, command_buffer: vk::CommandBuffer, egui_output: &EguiOutput) {
         // bind the pipeline
         unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline); }
         let viewport = [vk::Viewport::builder()
@@ -185,7 +184,7 @@ impl UiPainter {
                 device.cmd_bind_index_buffer(command_buffer, ui_mesh.index_buffer.vk_buffer(), 0, vk::IndexType::UINT32);
                 let descriptor_sets = &[self.textures.get(&ui_mesh.texture_id).unwrap().descriptor_set];
                 device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout, 0, descriptor_sets, &[]);
-                let screen_size = ui_output.run_output.screen_state.size_in_points();
+                let screen_size = egui_output.screen_state.size_in_points();
                 let screen_size_data: &[u8] = bytemuck::cast_slice(&screen_size);
                 device.cmd_push_constants(command_buffer, self.pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, screen_size_data);
 

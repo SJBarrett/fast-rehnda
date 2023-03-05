@@ -1,28 +1,26 @@
-use bevy_ecs::prelude::{Res, ResMut};
+use bevy_ecs::prelude::{NonSend, Res, ResMut};
+use bevy_ecs::system::NonSendMut;
 use egui::DragValue;
 use glam::{EulerRot, Mat4, Quat};
 
 use crate::ecs_engine::EtnaWindow;
 use crate::rehnda_core::Vec3;
 use crate::scene::Camera;
-use crate::ui::{UiContext, UiOutput};
 use crate::ui::ui_painter::{EguiOutput, ScreenState};
 
-pub fn ui_builder_system(mut camera: ResMut<Camera>, mut ui_context: ResMut<UiContext>, mut ui_output: ResMut<UiOutput>, window: Res<EtnaWindow>) {
-    let new_input = ui_context.take_egui_input(&window.winit_window);
-    let full_output = ui_context.run(new_input, |egui_ctx| {
+pub fn ui_builder_system(mut camera: ResMut<Camera>, egui_ctx: NonSend<egui::Context>, mut winit_state: NonSendMut<egui_winit::State>, mut ui_output: ResMut<EguiOutput>, window: Res<EtnaWindow>) {
+    let new_input = winit_state.take_egui_input(&window.winit_window);
+    let full_output = egui_ctx.run(new_input, |egui_ctx| {
         draw_ui(egui_ctx, &mut camera);
     });
 
-    ui_context.handle_platform_output(&window.winit_window, full_output.platform_output);
-    ui_output.run_output = EguiOutput {
-        clipped_primitives: ui_context.egui_ctx.tessellate(full_output.shapes),
-        texture_delta: full_output.textures_delta,
-        screen_state: ScreenState {
-            size_in_pixels: [window.winit_window.inner_size().width, window.winit_window.inner_size().height],
-            pixels_per_point: ui_context.egui_ctx.pixels_per_point(),
-        },
+    winit_state.handle_platform_output(&window.winit_window,  &egui_ctx, full_output.platform_output);
+    ui_output.screen_state = ScreenState {
+        size_in_pixels: [window.winit_window.inner_size().width, window.winit_window.inner_size().height],
+        pixels_per_point: egui_ctx.pixels_per_point(),
     };
+    ui_output.clipped_primitives = egui_ctx.tessellate(full_output.shapes);
+    ui_output.texture_delta = full_output.textures_delta;
 }
 
 fn draw_ui(egui_ctx: &egui::Context, camera: &mut Camera) {

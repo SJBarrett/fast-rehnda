@@ -7,14 +7,14 @@ use glam::{EulerRot, Quat};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::event::WindowEvent;
-use winit::event_loop::{EventLoop, EventLoopWindowTarget};
+use winit::event_loop::{EventLoopWindowTarget};
 use winit::window::Window;
 
 use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4, Vec3};
 use crate::scene::{AssetManager, Camera, RenderObject};
-use crate::ui::{init_ui_resources, ui_builder_system, UiContext, UiPainter};
+use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {
     // sync objects above here
@@ -54,7 +54,8 @@ impl EcsEngine {
             .with_system(ui_builder_system)
             .with_system(draw_system.after(ui_builder_system))
         );
-
+        app.insert_non_send_resource(egui::Context::default());
+        app.insert_non_send_resource(egui_winit::State::new(event_loop));
         EcsEngine {
             app,
         }
@@ -82,9 +83,7 @@ impl EcsEngine {
         let frame_renderer = FrameRenderContext::create(device.ptr(), &command_pool, &mut descriptor_manager);
 
         // ui resources
-        let (ui_context, ui_output) = init_ui_resources(event_loop);
-        app.insert_resource(ui_context);
-        app.insert_resource(ui_output);
+        app.insert_resource(EguiOutput::default());
         app.insert_resource(UiPainter::create(device.ptr(), &physical_device.graphics_settings, &swapchain));
 
         let etna_context = EtnaContext {
@@ -110,8 +109,9 @@ impl EcsEngine {
     }
 
     pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
-        // let mut egui_ctx = self.app.world.resource_mut::<UiContext>();
-        // let _ = egui_ctx.on_event(&window_event);
+        let world = self.app.world.cell();
+        let winit_state = &mut world.non_send_resource_mut::<egui_winit::State>();
+        let _ = winit_state.on_event(&world.non_send_resource::<egui::Context>(), window_event);
     }
 }
 
@@ -159,7 +159,7 @@ fn should_render(window: Res<EtnaWindow>) -> ShouldRun {
 impl Drop for EcsEngine {
     fn drop(&mut self) {
         unsafe { self.app.world.resource::<LongLivedObject<Device>>().device_wait_idle().expect("Failed to wait for the device to be idle") };
-        self.app.world.remove_resource::<UiContext>();
+        self.app.world.remove_resource::<EguiOutput>();
         self.app.world.remove_resource::<UiPainter>();
         self.app.world.remove_resource::<AssetManager>();
         self.app.world.remove_resource::<CommandPool>();

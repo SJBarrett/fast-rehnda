@@ -8,7 +8,7 @@ use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateI
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
 use crate::scene::{AssetManager, Camera, MaterialHandle, Model, ModelHandle, RenderObject, ViewProjectionMatrices};
-use crate::ui::{UiOutput, UiPainter};
+use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -35,7 +35,7 @@ impl Debug for FrameData {
     }
 }
 
-pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, physical_device: PhysicalDeviceRes, command_pool: Res<CommandPool>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>, mut ui_painter: ResMut<UiPainter>, ui_output: Res<UiOutput>) {
+pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, physical_device: PhysicalDeviceRes, command_pool: Res<CommandPool>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>, mut ui_painter: ResMut<UiPainter>, ui_output: Res<EguiOutput>) {
     let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
     update_global_buffer(frame_data, &camera);
