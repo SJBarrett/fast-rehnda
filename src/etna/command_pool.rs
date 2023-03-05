@@ -1,10 +1,12 @@
 use std::ops::Deref;
 
 use ash::vk;
+use bevy_ecs::system::Resource;
 
 use crate::rehnda_core::ConstPtr;
 use crate::etna;
 
+#[derive(Resource)]
 pub struct CommandPool {
     device: ConstPtr<etna::Device>,
     command_pool: vk::CommandPool,

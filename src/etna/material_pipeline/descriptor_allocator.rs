@@ -126,3 +126,6 @@ impl Drop for DescriptorAllocator {
         }
     }
 }
+
+unsafe impl Send for DescriptorAllocator {}
+unsafe impl Sync for DescriptorAllocator {}

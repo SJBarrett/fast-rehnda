@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use ahash::AHashMap;
+use bevy_ecs::system::Resource;
 use lazy_static::lazy_static;
 
 use crate::rehnda_core::{ConstPtr, Mat4};
@@ -14,6 +15,7 @@ lazy_static! {
     static ref RENDERING_START_TIME: Instant = Instant::now();
 }
 
+#[derive(Resource)]
 pub struct Scene {
     device: ConstPtr<Device>,
     physical_device: ConstPtr<PhysicalDevice>,

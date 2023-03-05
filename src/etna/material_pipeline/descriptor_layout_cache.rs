@@ -85,3 +85,6 @@ impl From<vk::DescriptorSetLayoutBinding> for EtnaDescriptorSetLayoutBinding {
         }
     }
 }
+
+unsafe impl Send for DescriptorLayoutCache {}
+unsafe impl Sync for DescriptorLayoutCache {}

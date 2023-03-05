@@ -10,6 +10,7 @@ mod scene;
 mod ui;
 mod application;
 mod etna_engine;
+mod ecs_engine;
 
 
 fn main() {

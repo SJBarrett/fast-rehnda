@@ -1,8 +1,10 @@
 use ash::vk;
+use bevy_ecs::system::Resource;
 use crate::rehnda_core::ConstPtr;
 use crate::etna::Device;
 use crate::etna::material_pipeline::{layout_binding, DescriptorAllocator, DescriptorBuilder, DescriptorLayoutCache};
 
+#[derive(Resource)]
 pub struct DescriptorManager {
     pub allocator: DescriptorAllocator,
     pub layout_cache: DescriptorLayoutCache,

@@ -135,3 +135,6 @@ impl HostMappedBuffer {
         self.buffer.buffer
     }
 }
+
+unsafe impl Send for HostMappedBuffer {}
+unsafe impl Sync for HostMappedBuffer {}

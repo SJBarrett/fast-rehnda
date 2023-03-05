@@ -4,6 +4,7 @@ use std::ops::Deref;
 
 use ash::extensions::khr;
 use ash::vk;
+use bevy_ecs::system::Resource;
 
 use crate::rehnda_core::ConstPtr;
 use crate::etna;
@@ -17,6 +18,7 @@ pub const DEVICE_EXTENSIONS: [&CStr; 4] = [
     khr::BufferDeviceAddress::name(),
 ];
 
+#[derive(Resource)]
 pub struct PhysicalDevice {
     instance: ConstPtr<etna::Instance>,
     physical_device: vk::PhysicalDevice,

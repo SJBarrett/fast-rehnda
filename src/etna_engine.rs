@@ -6,7 +6,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::EventLoopWindowTarget;
 
 use crate::etna;
-use crate::etna::{CommandPool, Device, PhysicalDevice, Swapchain, SwapchainError};
+use crate::etna::{CommandPool, Device, draw_frame, PhysicalDevice, Swapchain, SwapchainError};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4};
 use crate::scene::{Scene, scene_builder};
@@ -75,7 +75,7 @@ impl EtnaEngine {
         }
         self.ui_runner.update_ui_state(&self.window, &mut self.scene);
         Self::update_scene(&mut self.scene);
-        let draw_result = self.frame_renderer.draw_frame(&self.physical_device, &self.command_pool, &self.swapchain, &self.scene, &mut self.ui_runner.painter);
+        let draw_result = draw_frame(&mut self.frame_renderer, &self.physical_device, &self.command_pool, &self.swapchain, &self.scene, &mut self.ui_runner.painter);
         match draw_result {
             Ok(_) => {}
             Err(SwapchainError::RequiresRecreation) => {

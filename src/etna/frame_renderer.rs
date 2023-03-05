@@ -2,6 +2,8 @@ use std::fmt::{Debug, Formatter};
 use std::mem::size_of;
 
 use ash::vk;
+use bevy_ecs::prelude::*;
+use log::info;
 
 use crate::rehnda_core::ConstPtr;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
@@ -11,6 +13,7 @@ use crate::ui::UiPainter;
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
+#[derive(Resource)]
 pub struct FrameRenderer {
     device: ConstPtr<Device>,
     frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
@@ -33,58 +36,107 @@ impl Debug for FrameData {
     }
 }
 
-impl FrameRenderer {
-    pub fn draw_frame(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain, scene: &Scene, egui_renderer: &mut UiPainter) -> SwapchainResult<()> {
-        let frame_data = unsafe { self.frame_data.get_unchecked(self.current_frame % MAX_FRAMES_IN_FLIGHT) };
+pub fn draw_system(mut frame_renderer: ResMut<FrameRenderer>, swapchain: Res<Swapchain>, scene: Res<Scene>) {
+    let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
-        update_global_buffer(frame_data, &scene.camera);
+    update_global_buffer(frame_data, &scene.camera);
 
-        // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
-        let image_index = prepare_to_draw(&self.device, swapchain, frame_data)?;
+    // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
+    let image_index = prepare_to_draw(&frame_renderer.device, &swapchain, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));
 
-        unsafe { self.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
-            .expect("Failed to being recording command buffer");
+    unsafe { frame_renderer.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
+        .expect("Failed to being recording command buffer");
 
-        cmd_begin_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
-        let mut last_material_handle = MaterialHandle::null();
-        let mut last_material: Option<&MaterialPipeline> = None;
-        let mut last_model_handle = ModelHandle::null();
-        let mut last_model: Option<&Model> = None;
-        for object in scene.objects() {
-            // new material so we should bind the new pipeline
-            if last_material_handle.is_null() || last_material_handle != object.material_handle {
-                let material = scene.material_ref(&object.material_handle);
-                last_material = Some(material);
-                bind_material(&self.device, swapchain, material, frame_data);
-            }
-            let current_material = unsafe { last_material.unwrap_unchecked() };
+    cmd_begin_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
+    let mut last_material_handle = MaterialHandle::null();
+    let mut last_material: Option<&MaterialPipeline> = None;
+    let mut last_model_handle = ModelHandle::null();
+    let mut last_model: Option<&Model> = None;
+    for object in scene.objects() {
+        // new material so we should bind the new pipeline
+        if last_material_handle.is_null() || last_material_handle != object.material_handle {
+            let material = scene.material_ref(&object.material_handle);
+            last_material = Some(material);
+            bind_material(&frame_renderer.device, &swapchain, material, frame_data);
+        }
+        let current_material = unsafe { last_material.unwrap_unchecked() };
 
-            // new model so bind model specific resources
-            if last_model_handle.is_null() || last_model_handle != object.model_handle {
-                let model = scene.model_ref(&object.model_handle);
-                last_model = Some(model);
-                bind_model(&self.device, frame_data, current_material, model);
-            }
-
-            let current_model = unsafe { last_model.unwrap_unchecked() };
-            draw_object(&self.device, frame_data, current_material, current_model, object);
-            last_material_handle = object.material_handle;
-            last_model_handle = object.model_handle;
+        // new model so bind model specific resources
+        if last_model_handle.is_null() || last_model_handle != object.model_handle {
+            let model = scene.model_ref(&object.model_handle);
+            last_model = Some(model);
+            bind_model(&frame_renderer.device, frame_data, current_material, model);
         }
 
-        egui_renderer.update_resources(physical_device, command_pool);
-        egui_renderer.draw(&self.device, swapchain, frame_data.command_buffer);
-
-        cmd_end_rendering(&self.device, swapchain, frame_data.command_buffer, image_index);
-
-        unsafe { self.device.end_command_buffer(frame_data.command_buffer) }
-            .expect("Failed to record command buffer");
-
-        submit_draw(&self.device, swapchain, image_index, frame_data)?;
-
-        self.current_frame += 1;
-        Ok(())
+        let current_model = unsafe { last_model.unwrap_unchecked() };
+        draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
+        last_material_handle = object.material_handle;
+        last_model_handle = object.model_handle;
     }
+
+    // egui_renderer.update_resources(physical_device, command_pool);
+    // egui_renderer.draw(&frame_renderer.device, swapchain, frame_data.command_buffer);
+
+    cmd_end_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
+
+    unsafe { frame_renderer.device.end_command_buffer(frame_data.command_buffer) }
+        .expect("Failed to record command buffer");
+
+    submit_draw(&frame_renderer.device, &swapchain, image_index, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));;
+
+    frame_renderer.current_frame += 1;
+}
+
+pub fn draw_frame(frame_renderer: &mut FrameRenderer, physical_device: &PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain, scene: &Scene, egui_renderer: &mut UiPainter) -> SwapchainResult<()> {
+    let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
+
+    update_global_buffer(frame_data, &scene.camera);
+
+    // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
+    let image_index = prepare_to_draw(&frame_renderer.device, swapchain, frame_data)?;
+
+    unsafe { frame_renderer.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
+        .expect("Failed to being recording command buffer");
+
+    cmd_begin_rendering(&frame_renderer.device, swapchain, frame_data.command_buffer, image_index);
+    let mut last_material_handle = MaterialHandle::null();
+    let mut last_material: Option<&MaterialPipeline> = None;
+    let mut last_model_handle = ModelHandle::null();
+    let mut last_model: Option<&Model> = None;
+    for object in scene.objects() {
+        // new material so we should bind the new pipeline
+        if last_material_handle.is_null() || last_material_handle != object.material_handle {
+            let material = scene.material_ref(&object.material_handle);
+            last_material = Some(material);
+            bind_material(&frame_renderer.device, swapchain, material, frame_data);
+        }
+        let current_material = unsafe { last_material.unwrap_unchecked() };
+
+        // new model so bind model specific resources
+        if last_model_handle.is_null() || last_model_handle != object.model_handle {
+            let model = scene.model_ref(&object.model_handle);
+            last_model = Some(model);
+            bind_model(&frame_renderer.device, frame_data, current_material, model);
+        }
+
+        let current_model = unsafe { last_model.unwrap_unchecked() };
+        draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
+        last_material_handle = object.material_handle;
+        last_model_handle = object.model_handle;
+    }
+
+    egui_renderer.update_resources(physical_device, command_pool);
+    egui_renderer.draw(&frame_renderer.device, swapchain, frame_data.command_buffer);
+
+    cmd_end_rendering(&frame_renderer.device, swapchain, frame_data.command_buffer, image_index);
+
+    unsafe { frame_renderer.device.end_command_buffer(frame_data.command_buffer) }
+        .expect("Failed to record command buffer");
+
+    submit_draw(&frame_renderer.device, swapchain, image_index, frame_data)?;
+
+    frame_renderer.current_frame += 1;
+    Ok(())
 }
 
 fn update_global_buffer(frame_data: &FrameData, camera: &Camera) {

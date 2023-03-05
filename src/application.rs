@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use winit::event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::EventLoop;
+use crate::ecs_engine::EcsEngine;
 
 use crate::etna_engine::EtnaEngine;
 
@@ -9,22 +10,22 @@ const WINDOW_WIDTH: u32 = 1600;
 const WINDOW_HEIGHT: u32 = 1200;
 
 pub struct Application {
-    _window: Arc<winit::window::Window>,
-    etna_engine: EtnaEngine,
+    // etna_engine: EtnaEngine,
+    etna_engine: EcsEngine,
 }
 
 // https://github.com/unknownue/vulkan-tutorial-rust/blob/master/src/tutorials/00_base_code.rs
 impl Application {
     pub fn new(event_loop: &EventLoop<()>) -> Application {
-        let window = Arc::new(winit::window::WindowBuilder::new()
+        let window = winit::window::WindowBuilder::new()
             .with_title(WINDOW_TITLE)
             .with_inner_size(winit::dpi::LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
             .build(event_loop)
-            .expect("Failed to create window."));
-        let engine = EtnaEngine::new(window.clone(), event_loop);
+            .expect("Failed to create window.");
+        // let engine = EtnaEngine::new(window.clone(), event_loop);
+        let engine = EcsEngine::new(window, event_loop);
 
         Application {
-            _window: window,
             etna_engine: engine,
         }
     }
@@ -69,10 +70,3 @@ impl Application {
         });
     }
 }
-
-impl Drop for Application {
-    fn drop(&mut self) {
-        self.etna_engine.wait_idle();
-    }
-}
-

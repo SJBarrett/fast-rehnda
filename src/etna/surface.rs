@@ -2,8 +2,10 @@ use std::ops::Deref;
 use ash::{Entry, Instance, vk};
 use ash::prelude::VkResult;
 use ash::vk::PhysicalDevice;
+use bevy_ecs::system::Resource;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
+#[derive(Resource)]
 pub struct Surface {
     surface: vk::SurfaceKHR,
     surface_fn: ash::extensions::khr::Surface,

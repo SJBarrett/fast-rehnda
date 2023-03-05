@@ -1,5 +1,7 @@
 use std::ops::Deref;
+use bevy_ecs::system::Resource;
 
+#[derive(Resource)]
 pub struct LongLivedObject<T> {
     object: Box<T>
 }
