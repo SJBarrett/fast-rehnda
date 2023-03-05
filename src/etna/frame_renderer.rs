@@ -3,18 +3,16 @@ use std::mem::size_of;
 
 use ash::vk;
 use bevy_ecs::prelude::*;
-use log::info;
 
-use crate::rehnda_core::ConstPtr;
-use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDevice, Swapchain, SwapchainResult, vkinit};
+use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
-use crate::scene::{Camera, MaterialHandle, Model, ModelHandle, RenderObject, Scene, ViewProjectionMatrices};
-use crate::ui::UiPainter;
+use crate::rehnda_core::ConstPtr;
+use crate::scene::{AssetManager, Camera, MaterialHandle, Model, ModelHandle, RenderObject, ViewProjectionMatrices};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 #[derive(Resource)]
-pub struct FrameRenderer {
+pub struct FrameRenderContext {
     device: ConstPtr<Device>,
     frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT],
     current_frame: usize,
@@ -36,10 +34,10 @@ impl Debug for FrameData {
     }
 }
 
-pub fn draw_system(mut frame_renderer: ResMut<FrameRenderer>, swapchain: Res<Swapchain>, scene: Res<Scene>) {
+pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>) {
     let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
-    update_global_buffer(frame_data, &scene.camera);
+    update_global_buffer(frame_data, &camera);
 
     // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
     let image_index = prepare_to_draw(&frame_renderer.device, &swapchain, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));
@@ -52,10 +50,10 @@ pub fn draw_system(mut frame_renderer: ResMut<FrameRenderer>, swapchain: Res<Swa
     let mut last_material: Option<&MaterialPipeline> = None;
     let mut last_model_handle = ModelHandle::null();
     let mut last_model: Option<&Model> = None;
-    for object in scene.objects() {
+    for object in query.iter() {
         // new material so we should bind the new pipeline
         if last_material_handle.is_null() || last_material_handle != object.material_handle {
-            let material = scene.material_ref(&object.material_handle);
+            let material = asset_manager.material_ref(&object.material_handle);
             last_material = Some(material);
             bind_material(&frame_renderer.device, &swapchain, material, frame_data);
         }
@@ -63,7 +61,7 @@ pub fn draw_system(mut frame_renderer: ResMut<FrameRenderer>, swapchain: Res<Swa
 
         // new model so bind model specific resources
         if last_model_handle.is_null() || last_model_handle != object.model_handle {
-            let model = scene.model_ref(&object.model_handle);
+            let model = asset_manager.model_ref(&object.model_handle);
             last_model = Some(model);
             bind_model(&frame_renderer.device, frame_data, current_material, model);
         }
@@ -82,61 +80,9 @@ pub fn draw_system(mut frame_renderer: ResMut<FrameRenderer>, swapchain: Res<Swa
     unsafe { frame_renderer.device.end_command_buffer(frame_data.command_buffer) }
         .expect("Failed to record command buffer");
 
-    submit_draw(&frame_renderer.device, &swapchain, image_index, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));;
+    submit_draw(&frame_renderer.device, &swapchain, image_index, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));
 
     frame_renderer.current_frame += 1;
-}
-
-pub fn draw_frame(frame_renderer: &mut FrameRenderer, physical_device: &PhysicalDevice, command_pool: &CommandPool, swapchain: &Swapchain, scene: &Scene, egui_renderer: &mut UiPainter) -> SwapchainResult<()> {
-    let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
-
-    update_global_buffer(frame_data, &scene.camera);
-
-    // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
-    let image_index = prepare_to_draw(&frame_renderer.device, swapchain, frame_data)?;
-
-    unsafe { frame_renderer.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
-        .expect("Failed to being recording command buffer");
-
-    cmd_begin_rendering(&frame_renderer.device, swapchain, frame_data.command_buffer, image_index);
-    let mut last_material_handle = MaterialHandle::null();
-    let mut last_material: Option<&MaterialPipeline> = None;
-    let mut last_model_handle = ModelHandle::null();
-    let mut last_model: Option<&Model> = None;
-    for object in scene.objects() {
-        // new material so we should bind the new pipeline
-        if last_material_handle.is_null() || last_material_handle != object.material_handle {
-            let material = scene.material_ref(&object.material_handle);
-            last_material = Some(material);
-            bind_material(&frame_renderer.device, swapchain, material, frame_data);
-        }
-        let current_material = unsafe { last_material.unwrap_unchecked() };
-
-        // new model so bind model specific resources
-        if last_model_handle.is_null() || last_model_handle != object.model_handle {
-            let model = scene.model_ref(&object.model_handle);
-            last_model = Some(model);
-            bind_model(&frame_renderer.device, frame_data, current_material, model);
-        }
-
-        let current_model = unsafe { last_model.unwrap_unchecked() };
-        draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
-        last_material_handle = object.material_handle;
-        last_model_handle = object.model_handle;
-    }
-
-    egui_renderer.update_resources(physical_device, command_pool);
-    egui_renderer.draw(&frame_renderer.device, swapchain, frame_data.command_buffer);
-
-    cmd_end_rendering(&frame_renderer.device, swapchain, frame_data.command_buffer, image_index);
-
-    unsafe { frame_renderer.device.end_command_buffer(frame_data.command_buffer) }
-        .expect("Failed to record command buffer");
-
-    submit_draw(&frame_renderer.device, swapchain, image_index, frame_data)?;
-
-    frame_renderer.current_frame += 1;
-    Ok(())
 }
 
 fn update_global_buffer(frame_data: &FrameData, camera: &Camera) {
@@ -201,11 +147,10 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
         device.cmd_bind_index_buffer(frame_data.command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
         if let Some(model_texture) = &model.texture {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0,  &[frame_data.global_descriptor, model_texture.descriptor_set], &[]);
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, model_texture.descriptor_set], &[]);
         } else {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0,  &[frame_data.global_descriptor], &[]);
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
         }
-
     }
 }
 
@@ -293,8 +238,8 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
 }
 
 // initialisation
-impl FrameRenderer {
-    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> FrameRenderer {
+impl FrameRenderContext {
+    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> FrameRenderContext {
         let command_buffers = command_pool.allocate_command_buffers(MAX_FRAMES_IN_FLIGHT as u32);
         let frame_data: [FrameData; MAX_FRAMES_IN_FLIGHT] = (0..MAX_FRAMES_IN_FLIGHT).map(|i| {
             let image_available_semaphore = unsafe { device.create_semaphore(&vkinit::SEMAPHORE_CREATE_INFO, None) }
@@ -329,7 +274,7 @@ impl FrameRenderer {
             .try_into()
             .unwrap();
 
-        FrameRenderer {
+        FrameRenderContext {
             device,
             frame_data,
             current_frame: 0,
@@ -337,7 +282,7 @@ impl FrameRenderer {
     }
 }
 
-impl Drop for FrameRenderer {
+impl Drop for FrameRenderContext {
     fn drop(&mut self) {
         unsafe {
             for frame_data in &self.frame_data {

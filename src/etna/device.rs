@@ -4,12 +4,16 @@ use std::ops::Deref;
 use std::os::raw::c_char;
 
 use ash::vk;
+use bevy_ecs::prelude::Res;
 use bevy_ecs::system::Resource;
 use gpu_allocator::AllocatorDebugSettings;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, Allocator, AllocatorCreateDesc};
 
 use crate::etna;
 use crate::etna::{DEVICE_EXTENSIONS, VALIDATION_LAYERS};
+use crate::rehnda_core::LongLivedObject;
+
+pub type DeviceRes<'w> = Res<'w, LongLivedObject<Device>>;
 
 #[derive(Resource)]
 pub struct Device {

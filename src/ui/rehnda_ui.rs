@@ -1,7 +1,7 @@
 use egui::DragValue;
 use glam::{EulerRot, Mat4, Quat};
 use crate::rehnda_core::Vec3;
-use crate::scene::{Camera, Scene};
+use crate::scene::{Camera};
 
 pub struct RehndaUi {
 }
@@ -14,24 +14,24 @@ impl Default for RehndaUi {
 }
 
 impl RehndaUi {
-    pub fn ui(&mut self, egui_ctx: &egui::Context, scene: &mut Scene)  {
-        let mut camera_state = CameraUiState::from_scene(&scene.camera);
-        egui::Window::new("Scene").show(egui_ctx, |ui| {
-            ui.heading("Camera");
-            ui.horizontal(|ui| {
-                ui.label("Translation: ");
-                ui.add(DragValue::new(&mut camera_state.translation.x).speed(0.03));
-                ui.add(DragValue::new(&mut camera_state.translation.y).speed(0.03));
-                ui.add(DragValue::new(&mut camera_state.translation.z).speed(0.03));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Rotation: ");
-                ui.add(DragValue::new(&mut camera_state.rotation.x).speed(0.1));
-                ui.add(DragValue::new(&mut camera_state.rotation.y).speed(0.1));
-                ui.add(DragValue::new(&mut camera_state.rotation.z).speed(0.1));
-            });
-        });
-        camera_state.update_scene(&mut scene.camera);
+    pub fn ui(&mut self, egui_ctx: &egui::Context)  {
+        // let mut camera_state = CameraUiState::from_scene(&scene.camera);
+        // egui::Window::new("Scene").show(egui_ctx, |ui| {
+        //     ui.heading("Camera");
+        //     ui.horizontal(|ui| {
+        //         ui.label("Translation: ");
+        //         ui.add(DragValue::new(&mut camera_state.translation.x).speed(0.03));
+        //         ui.add(DragValue::new(&mut camera_state.translation.y).speed(0.03));
+        //         ui.add(DragValue::new(&mut camera_state.translation.z).speed(0.03));
+        //     });
+        //     ui.horizontal(|ui| {
+        //         ui.label("Rotation: ");
+        //         ui.add(DragValue::new(&mut camera_state.rotation.x).speed(0.1));
+        //         ui.add(DragValue::new(&mut camera_state.rotation.y).speed(0.1));
+        //         ui.add(DragValue::new(&mut camera_state.rotation.z).speed(0.1));
+        //     });
+        // });
+        // camera_state.update_scene(&mut scene.camera);
     }
 }
 

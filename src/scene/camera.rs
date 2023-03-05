@@ -1,3 +1,4 @@
+use bevy_ecs::prelude::Resource;
 use bytemuck_derive::{Pod, Zeroable};
 use crate::rehnda_core::Mat4;
 
@@ -8,6 +9,7 @@ pub struct ViewProjectionMatrices {
     pub projection: Mat4,
 }
 
+#[derive(Resource)]
 pub struct Camera {
     pub transform: Mat4,
     pub projection: Mat4,

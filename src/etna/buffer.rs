@@ -5,10 +5,9 @@ use std::ptr::NonNull;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
-use log::{debug, info};
 
-use crate::rehnda_core::ConstPtr;
 use crate::etna;
+use crate::rehnda_core::ConstPtr;
 
 pub struct Buffer {
     device: ConstPtr<etna::Device>,

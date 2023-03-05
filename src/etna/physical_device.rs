@@ -4,9 +4,10 @@ use std::ops::Deref;
 
 use ash::extensions::khr;
 use ash::vk;
+use bevy_ecs::prelude::Res;
 use bevy_ecs::system::Resource;
 
-use crate::rehnda_core::ConstPtr;
+use crate::rehnda_core::{ConstPtr, LongLivedObject};
 use crate::etna;
 use crate::etna::{GraphicsSettings, MsaaSamples};
 use crate::etna::utility::vk_cstr_to_string;
@@ -17,6 +18,9 @@ pub const DEVICE_EXTENSIONS: [&CStr; 4] = [
     khr::Synchronization2::name(),
     khr::BufferDeviceAddress::name(),
 ];
+
+pub type PhysicalDeviceRes<'w> = Res<'w, LongLivedObject<PhysicalDevice>>;
+
 
 #[derive(Resource)]
 pub struct PhysicalDevice {

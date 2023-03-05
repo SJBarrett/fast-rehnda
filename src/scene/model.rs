@@ -1,12 +1,14 @@
 use std::path::Path;
 
 use ash::vk;
+use bevy_ecs::prelude::Component;
 
 use crate::rehnda_core::{ConstPtr, Mat4, Vec2, Vec3};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::scene::{MaterialHandle, ModelHandle, Vertex};
 
+#[derive(Component)]
 pub struct RenderObject {
     pub transform: Mat4,
     pub model_handle: ModelHandle,

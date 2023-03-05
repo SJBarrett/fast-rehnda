@@ -5,7 +5,6 @@ use winit::event_loop::EventLoopWindowTarget;
 
 use crate::etna::{Device, GraphicsSettings, Swapchain};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::Scene;
 use crate::ui::RehndaUi;
 use crate::ui::ui_painter::{EguiOutput, UiPainter, ScreenState};
 
@@ -36,9 +35,9 @@ impl UiRunner {
         let _ = self.winit_integration.on_event(&self.egui_ctx, window_event);
     }
 
-    pub fn update_ui_state(&mut self, window: &winit::window::Window, scene: &mut Scene) {
+    pub fn update_ui_state(&mut self, window: &winit::window::Window) {
         let new_input = self.winit_integration.take_egui_input(window);
-        let full_output = self.egui_ctx.run(new_input, |egui_ctx| self.ui.ui(egui_ctx, scene));
+        let full_output = self.egui_ctx.run(new_input, |egui_ctx| self.ui.ui(egui_ctx));
         self.winit_integration.handle_platform_output(window, &self.egui_ctx, full_output.platform_output);
         self.painter.egui_output = EguiOutput {
             clipped_primitives: self.egui_ctx.tessellate(full_output.shapes),
