@@ -3,6 +3,8 @@ use std::path::Path;
 use bevy_app::App;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ShouldRun;
+use egui::epaint::Shadow;
+use egui::Visuals;
 use glam::{EulerRot, Quat};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -10,7 +12,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{EventLoopWindowTarget};
 use winit::window::Window;
 
-use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain};
+use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain, swapchain_systems};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4, Vec3};
 use crate::scene::{AssetManager, Camera, RenderObject};
@@ -42,7 +44,6 @@ pub struct RenderLabel;
 #[derive(SystemLabel)]
 pub struct UiLabel;
 
-
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
@@ -54,8 +55,7 @@ impl EcsEngine {
             .with_system(ui_builder_system)
             .with_system(draw_system.after(ui_builder_system))
         );
-        app.insert_non_send_resource(egui::Context::default());
-        app.insert_non_send_resource(egui_winit::State::new(event_loop));
+        app.add_system(swapchain_systems::swap_chain_recreation_system.with_run_criteria(swapchain_systems::swap_chain_needs_recreation).after(draw_system));
         EcsEngine {
             app,
         }
@@ -83,6 +83,12 @@ impl EcsEngine {
         let frame_renderer = FrameRenderContext::create(device.ptr(), &command_pool, &mut descriptor_manager);
 
         // ui resources
+        let egui_ctx = egui::Context::default();
+        let mut dark_visuals = Visuals::dark();
+        dark_visuals.window_shadow = Shadow::NONE;
+        egui_ctx.set_visuals(dark_visuals);
+        app.insert_non_send_resource(egui::Context::default());
+        app.insert_non_send_resource(egui_winit::State::new(event_loop));
         app.insert_resource(EguiOutput::default());
         app.insert_resource(UiPainter::create(device.ptr(), &physical_device.graphics_settings, &swapchain));
 

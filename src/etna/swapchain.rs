@@ -1,11 +1,11 @@
 use ash::extensions::khr;
 use ash::vk;
-use bevy_ecs::system::Resource;
+use bevy_ecs::prelude::*;
 use log::debug;
 
-use crate::rehnda_core::ConstPtr;
 use crate::etna;
-use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices};
+use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, PhysicalDeviceRes, QueueFamilyIndices, Surface};
+use crate::rehnda_core::ConstPtr;
 
 #[derive(Resource)]
 pub struct Swapchain {
@@ -19,6 +19,8 @@ pub struct Swapchain {
     pub depth_buffer: DepthBuffer,
     pub color_image: Image,
     pub msaa_enabled: bool,
+
+    pub needs_recreation: bool,
 }
 
 pub type SwapchainResult<T> = Result<T, SwapchainError>;
@@ -98,6 +100,7 @@ impl Swapchain {
             depth_buffer,
             color_image,
             msaa_enabled: physical_device.graphics_settings.is_msaa_enabled(),
+            needs_recreation: false,
         }
     }
 
@@ -196,5 +199,27 @@ fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, exten
         memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         image_aspect_flags: vk::ImageAspectFlags::COLOR,
         num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
+    }
+}
+
+pub mod swapchain_systems {
+    use bevy_ecs::prelude::*;
+    use bevy_ecs::schedule::ShouldRun;
+
+    use crate::ecs_engine::EtnaWindow;
+    use crate::etna::{CommandPool, PhysicalDeviceRes, Surface, Swapchain};
+    use crate::scene::Camera;
+
+    pub fn swap_chain_recreation_system(mut swapchain: ResMut<Swapchain>, physical_device: PhysicalDeviceRes, surface: Res<Surface>, command_pool: Res<CommandPool>, window: Res<EtnaWindow>, mut camera: ResMut<Camera>) {
+        swapchain.recreate(&physical_device, &surface, &command_pool, &physical_device.queue_families(), surface.query_best_swapchain_creation_details(window.winit_window.inner_size(), physical_device.handle()));
+        camera.update_aspect_ratio(swapchain.aspect_ratio());
+    }
+
+    pub fn swap_chain_needs_recreation(swapchain: Res<Swapchain>) -> ShouldRun {
+        if swapchain.needs_recreation {
+            ShouldRun::Yes
+        } else {
+            ShouldRun::No
+        }
     }
 }

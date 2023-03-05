@@ -35,13 +35,29 @@ impl Debug for FrameData {
     }
 }
 
-pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, physical_device: PhysicalDeviceRes, command_pool: Res<CommandPool>, swapchain: Res<Swapchain>, asset_manager: Res<AssetManager>, camera: Res<Camera>, query: Query<&RenderObject>, mut ui_painter: ResMut<UiPainter>, ui_output: Res<EguiOutput>) {
+pub fn draw_system(
+    mut frame_renderer: ResMut<FrameRenderContext>,
+    physical_device: PhysicalDeviceRes,
+    command_pool: Res<CommandPool>,
+    mut swapchain: ResMut<Swapchain>,
+    asset_manager: Res<AssetManager>,
+    camera: Res<Camera>,
+    query: Query<&RenderObject>,
+    mut ui_painter: ResMut<UiPainter>,
+    ui_output: Res<EguiOutput>,
+) {
     let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
     update_global_buffer(frame_data, &camera);
 
     // acquire the image from the swapcahin to draw to, waiting for the previous usage of this frame data to be free
-    let image_index = prepare_to_draw(&frame_renderer.device, &swapchain, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));
+    let image_index = match prepare_to_draw(&frame_renderer.device, &swapchain, frame_data) {
+        Ok(index) => index,
+        Err(_) => {
+            swapchain.needs_recreation = true;
+            return;
+        }
+    };
 
     unsafe { frame_renderer.device.begin_command_buffer(frame_data.command_buffer, &vkinit::COMMAND_BUFFER_BEGIN_INFO) }
         .expect("Failed to being recording command buffer");
@@ -81,7 +97,10 @@ pub fn draw_system(mut frame_renderer: ResMut<FrameRenderContext>, physical_devi
     unsafe { frame_renderer.device.end_command_buffer(frame_data.command_buffer) }
         .expect("Failed to record command buffer");
 
-    submit_draw(&frame_renderer.device, &swapchain, image_index, frame_data).unwrap_or_else(|_| panic!("Need to implement resize"));
+    if let Err(_) = submit_draw(&frame_renderer.device, &swapchain, image_index, frame_data) {
+        swapchain.needs_recreation = true;
+        return;
+    };
 
     frame_renderer.current_frame += 1;
 }
