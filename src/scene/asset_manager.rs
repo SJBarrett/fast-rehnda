@@ -43,6 +43,13 @@ impl AssetManager {
         handle
     }
 
+    pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
+        let model = Model::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
+        let handle = ModelHandle::new(self.models.len() as u32);
+        self.models.insert(handle, model);
+        handle
+    }
+
     pub fn add_material(&mut self, material_pipeline: MaterialPipeline) -> MaterialHandle {
         let handle = MaterialHandle::new(self.materials.len() as u32);
         self.materials.insert(handle, material_pipeline);

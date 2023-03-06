@@ -15,7 +15,7 @@ use winit::window::Window;
 use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain, swapchain_systems};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{LongLivedObject, Mat4, Vec3};
-use crate::scene::{AssetManager, Camera, RenderObject};
+use crate::scene::{AssetManager, Camera, Model, RenderObject};
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {
@@ -125,16 +125,14 @@ fn scene_init_system(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 100.0);
     camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
     commands.insert_resource(camera);
-
-
-    // models
+    let cube_model = asset_manager.load_gltf(Path::new("assets/models/box/Box.gltf"), &mut descriptor_manager);
     let viking_model_handle = asset_manager.load_textured_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"), &mut descriptor_manager);
     let suzanne = asset_manager.load_model(Path::new("assets/suzanne.obj"));
 
     let textured_material = asset_manager.add_material(material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
     let non_textured_material = asset_manager.add_material(material_pipeline::non_textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
 
-    // objects
+
     commands.spawn_batch(vec![
         (RenderObject {
             transform: Mat4::IDENTITY,
@@ -143,8 +141,8 @@ fn scene_init_system(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
         }),
         (RenderObject {
             transform: Mat4::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
-            model_handle: viking_model_handle,
-            material_handle: textured_material,
+            model_handle: cube_model,
+            material_handle: non_textured_material,
         }),
         (RenderObject {
             transform: Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (0.0, 1.0, 0.0).into()),
@@ -170,7 +168,6 @@ impl Drop for EcsEngine {
         self.app.world.remove_resource::<AssetManager>();
         self.app.world.remove_resource::<CommandPool>();
         self.app.world.remove_resource::<FrameRenderContext>();
-        // self.world.remove_resource::<UiRunner>();
         self.app.world.remove_resource::<DescriptorManager>();
         self.app.world.remove_resource::<Swapchain>();
         self.app.world.remove_resource::<Surface>();
