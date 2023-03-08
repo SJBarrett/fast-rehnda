@@ -7,7 +7,8 @@ use bevy_ecs::prelude::*;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::{AssetManager, Camera, MaterialHandle, Model, ModelHandle, RenderObject, ViewProjectionMatrices};
+use crate::scene::{AssetManager, Camera, MaterialHandle, MeshHandle, Model, ModelHandle, ViewProjectionMatrices};
+use crate::scene::render_object::{Mesh, MultiMeshModel, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -65,8 +66,8 @@ pub fn draw_system(
     cmd_begin_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
     let mut last_material_handle = MaterialHandle::null();
     let mut last_material: Option<&MaterialPipeline> = None;
-    let mut last_model_handle = ModelHandle::null();
-    let mut last_model: Option<&Model> = None;
+    let mut last_mesh_handle = MeshHandle::null();
+    let mut last_mesh: Option<&Mesh> = None;
     for object in query.iter() {
         // new material so we should bind the new pipeline
         if last_material_handle.is_null() || last_material_handle != object.material_handle {
@@ -76,17 +77,19 @@ pub fn draw_system(
         }
         let current_material = unsafe { last_material.unwrap_unchecked() };
 
-        // new model so bind model specific resources
-        if last_model_handle.is_null() || last_model_handle != object.model_handle {
-            let model = asset_manager.model_ref(&object.model_handle);
-            last_model = Some(model);
-            bind_model(&frame_renderer.device, frame_data, current_material, model);
-        }
+        for &mesh_handle in asset_manager.meshes_ref(&object.model_handle) {
+            // new model so bind model specific resources
+            if last_mesh_handle.is_null() || last_mesh_handle != mesh_handle {
+                let mesh = asset_manager.mesh_ref(&mesh_handle);
+                last_mesh = Some(mesh);
+                bind_model(&frame_renderer.device, frame_data, current_material, mesh);
+            }
 
-        let current_model = unsafe { last_model.unwrap_unchecked() };
-        draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
-        last_material_handle = object.material_handle;
-        last_model_handle = object.model_handle;
+            let current_model = unsafe { last_mesh.unwrap_unchecked() };
+            draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
+            last_material_handle = object.material_handle;
+            last_mesh_handle = mesh_handle;
+        }
     }
 
     ui_painter.update_resources(&physical_device, &command_pool, &ui_output);
@@ -160,13 +163,13 @@ fn bind_material(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipe
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
 }
 
-fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model) {
-    let buffers = &[model.vertex_buffer.buffer];
+fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh) {
+    let buffers = &[mesh.vertex_buffer.buffer];
     let offsets = &[0u64];
     unsafe {
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
-        device.cmd_bind_index_buffer(frame_data.command_buffer, model.index_buffer.buffer, 0, vk::IndexType::UINT16);
-        if let Some(model_texture) = &model.texture {
+        device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT16);
+        if let Some(model_texture) = &mesh.texture {
             device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, model_texture.descriptor_set], &[]);
         } else {
             device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
@@ -174,11 +177,12 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
     }
 }
 
-fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, model: &Model, render_object: &RenderObject) {
-    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&render_object.transform));
+fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, render_object: &RenderObject) {
+    let transform = mesh.relative_transform * render_object.global_transform;
+    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&transform));
     unsafe {
         device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
-        device.cmd_draw_indexed(frame_data.command_buffer, model.index_count, 1, 0, 0, 0);
+        device.cmd_draw_indexed(frame_data.command_buffer, mesh.index_count, 1, 0, 0, 0);
     }
 }
 

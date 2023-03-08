@@ -7,3 +7,5 @@ pub use model::*;
 mod vertex;
 pub use vertex::*;
 pub mod demo_scenes;
+pub mod gltf_loader;
+pub mod render_object;

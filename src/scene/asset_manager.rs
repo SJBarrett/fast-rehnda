@@ -7,14 +7,17 @@ use bevy_ecs::system::Resource;
 use crate::etna::{CommandPool, Device, PhysicalDevice};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::Model;
+use crate::scene::{gltf_loader, Model};
+use crate::scene::render_object::{Mesh, MultiMeshModel};
+
 
 #[derive(Resource)]
 pub struct AssetManager {
     device: ConstPtr<Device>,
     physical_device: ConstPtr<PhysicalDevice>,
     resource_command_pool: CommandPool,
-    models: AHashMap<ModelHandle, Model>,
+    models: AHashMap<ModelHandle, Vec<MeshHandle>>,
+    meshes: AHashMap<MeshHandle, Mesh>,
     materials: AHashMap<MaterialHandle, MaterialPipeline>,
 }
 
@@ -25,6 +28,7 @@ impl AssetManager {
             physical_device,
             resource_command_pool,
             models: AHashMap::new(),
+            meshes: AHashMap::new(),
             materials: AHashMap::new(),
         }
     }
@@ -32,21 +36,32 @@ impl AssetManager {
     pub fn load_textured_model(&mut self, obj_path: &Path, texture_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
         let model = Model::load_textured_obj(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, obj_path, texture_path);
         let handle = ModelHandle::new(self.models.len() as u32);
-        self.models.insert(handle, model);
+        let meshes = self.load_meshes_for_model(model);
+        self.models.insert(handle, meshes);
         handle
     }
 
     pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
         let model = Model::load_obj(self.device, &self.resource_command_pool, obj_path);
         let handle = ModelHandle::new(self.models.len() as u32);
-        self.models.insert(handle, model);
+        let meshes = self.load_meshes_for_model(model);
+        self.models.insert(handle, meshes);
         handle
     }
 
+    fn load_meshes_for_model(&mut self, model: MultiMeshModel) -> Vec<MeshHandle> {
+        model.meshes.into_iter().map(|mesh| {
+            let mesh_handle = MeshHandle::new(self.meshes.len() as u32);
+            self.meshes.insert(mesh_handle, mesh);
+            mesh_handle
+        }).collect()
+    }
+
     pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
-        let model = Model::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
+        let model = gltf_loader::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
         let handle = ModelHandle::new(self.models.len() as u32);
-        self.models.insert(handle, model);
+        let meshes = self.load_meshes_for_model(model);
+        self.models.insert(handle, meshes);
         handle
     }
 
@@ -56,8 +71,12 @@ impl AssetManager {
         handle
     }
 
-    pub fn model_ref(&self, model_handle: &ModelHandle) -> &Model {
-        unsafe { self.models.get(model_handle).unwrap_unchecked() }
+    pub fn meshes_ref(&self, model_handle: &ModelHandle) -> &[MeshHandle] {
+        unsafe { self.models.get(model_handle).unwrap_unchecked().as_slice() }
+    }
+
+    pub fn mesh_ref(&self, mesh_handle: &MeshHandle) -> &Mesh {
+        unsafe { self.meshes.get(mesh_handle).unwrap_unchecked() }
     }
 
     pub fn material_ref(&self, material_handle: &MaterialHandle) -> &MaterialPipeline {
@@ -65,7 +84,8 @@ impl AssetManager {
     }
 }
 
-pub type ModelHandle = ResourceHandle<Model>;
+pub type MeshHandle = ResourceHandle<Mesh>;
+pub type ModelHandle = ResourceHandle<MultiMeshModel>;
 pub type MaterialHandle = ResourceHandle<MaterialPipeline>;
 
 #[derive(Debug)]
