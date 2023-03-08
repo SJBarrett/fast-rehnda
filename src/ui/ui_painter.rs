@@ -5,7 +5,7 @@ use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureId, TextureOptions
 use egui::epaint::{Primitive, Vertex};
 use log::info;
 
-use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, Swapchain, Texture, TextureCreateInfo};
+use crate::etna::{CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, PhysicalDevice, SamplerOptions, Swapchain, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::ConstPtr;
 use crate::ui::ui_pipeline::{egui_pipeline, UiPipeline};
@@ -58,7 +58,7 @@ impl UiPainter {
             height: size[1] as _,
             mip_levels: None,
             data,
-            sampler_info: Some(
+            sampler_info: SamplerOptions::CreateInfo(
                 vk::SamplerCreateInfo::builder()
                     .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                     .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)

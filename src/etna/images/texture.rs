@@ -28,7 +28,7 @@ pub struct TextureCreateInfo<'a> {
     pub height: u32,
     pub mip_levels: Option<u32>,
     pub data: &'a [u8],
-    pub sampler_info: Option<vk::SamplerCreateInfo>,
+    pub sampler_info: SamplerOptions<'a>,
 }
 
 impl Texture {
@@ -40,7 +40,13 @@ impl Texture {
             height: rgba_img.height(),
             data: rgba_img.as_bytes(),
             mip_levels: Some((rgba_img.width().max(rgba_img.height())).ilog2() + 1),
-            sampler_info: None,
+            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
+                min_filter: None,
+                mag_filter: None,
+                mip_map_mode: None,
+                address_mode_u: vk::SamplerAddressMode::REPEAT,
+                address_mode_v: vk::SamplerAddressMode::REPEAT,
+            }),
         };
         Self::create(device, physical_device, command_pool, descriptor_manager, &create_info)
     }
@@ -94,30 +100,33 @@ impl Texture {
 
         Self::generate_mipmaps(&device, physical_device, &image, create_info.width, create_info.height, mip_levels, *command_buffer);
 
-        let sampler_create_info = create_info.sampler_info.unwrap_or_else(||
-            vk::SamplerCreateInfo::builder()
-                .mag_filter(vk::Filter::LINEAR)
-                .min_filter(vk::Filter::LINEAR)
-                .address_mode_u(vk::SamplerAddressMode::REPEAT)
-                .address_mode_v(vk::SamplerAddressMode::REPEAT)
-                .address_mode_w(vk::SamplerAddressMode::REPEAT)
-                // only use anisotropy if the feature is enabled
-                .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
-                .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
-                    physical_device.device_properties.limits.max_sampler_anisotropy
-                } else {
-                    1.0
-                })
-                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
-                .unnormalized_coordinates(false)
-                .compare_enable(false)
-                .compare_op(vk::CompareOp::ALWAYS)
-                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-                .min_lod(0.0)
-                .max_lod(mip_levels as f32)
-                .mip_lod_bias(0.0)
-                .build()
-        );
+        let sampler_create_info = match create_info.sampler_info {
+            SamplerOptions::FilterOptions(filter_options) => {
+                vk::SamplerCreateInfo::builder()
+                    .mag_filter(filter_options.mag_filter.unwrap_or(vk::Filter::LINEAR))
+                    .min_filter(filter_options.min_filter.unwrap_or(vk::Filter::LINEAR))
+                    .address_mode_u(filter_options.address_mode_u)
+                    .address_mode_v(filter_options.address_mode_v)
+                    .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                    // only use anisotropy if the feature is enabled
+                    .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
+                    .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
+                        physical_device.device_properties.limits.max_sampler_anisotropy
+                    } else {
+                        1.0
+                    })
+                    .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                    .unnormalized_coordinates(false)
+                    .compare_enable(false)
+                    .compare_op(vk::CompareOp::ALWAYS)
+                    .mipmap_mode(filter_options.mip_map_mode.unwrap_or(vk::SamplerMipmapMode::LINEAR))
+                    .min_lod(0.0)
+                    .max_lod(mip_levels as f32)
+                    .mip_lod_bias(0.0)
+                    .build()
+            },
+            SamplerOptions::CreateInfo(create_info) => create_info
+        };
 
         let sampler = unsafe { device.create_sampler(&sampler_create_info, None) }
             .expect("Failed to create sampler for Texture");
@@ -226,5 +235,53 @@ impl Texture {
             base_mip_level: mip_levels - 1,
             level_count: 1,
         });
+    }
+}
+
+pub enum SamplerOptions<'a> {
+    FilterOptions(&'a TexSamplerOptions),
+    CreateInfo(vk::SamplerCreateInfo),
+}
+
+
+pub struct TexSamplerOptions {
+    pub min_filter: Option<vk::Filter>,
+    pub mag_filter: Option<vk::Filter>,
+    pub mip_map_mode: Option<vk::SamplerMipmapMode>,
+    pub address_mode_u: vk::SamplerAddressMode,
+    pub address_mode_v: vk::SamplerAddressMode,
+}
+
+impl TexSamplerOptions {
+    pub fn from_gltf(sampler: &gltf::texture::Sampler) -> Self {
+        let mip_map_mode = sampler.min_filter().and_then(|filter| match filter {
+            gltf::texture::MinFilter::Nearest | gltf::texture::MinFilter::Linear => None,
+            gltf::texture::MinFilter::NearestMipmapNearest | gltf::texture::MinFilter::NearestMipmapLinear => Some(vk::SamplerMipmapMode::NEAREST),
+            gltf::texture::MinFilter::LinearMipmapNearest | gltf::texture::MinFilter::LinearMipmapLinear => Some(vk::SamplerMipmapMode::LINEAR),
+        });
+        let min_filter = sampler.min_filter().map(|filter| match filter {
+            gltf::texture::MinFilter::Nearest | gltf::texture::MinFilter::NearestMipmapNearest | gltf::texture::MinFilter::LinearMipmapNearest => vk::Filter::NEAREST,
+            gltf::texture::MinFilter::Linear | gltf::texture::MinFilter::NearestMipmapLinear | gltf::texture::MinFilter::LinearMipmapLinear => vk::Filter::LINEAR,
+        });
+        let mag_filter = sampler.mag_filter().map(|filter| match filter {
+            gltf::texture::MagFilter::Nearest => vk::Filter::NEAREST,
+            gltf::texture::MagFilter::Linear => vk::Filter::LINEAR,
+        });
+
+        TexSamplerOptions {
+            min_filter,
+            mag_filter,
+            mip_map_mode,
+            address_mode_u: Self::to_vk_sampler_mode(&sampler.wrap_s()),
+            address_mode_v: Self::to_vk_sampler_mode(&sampler.wrap_t()),
+        }
+    }
+
+    fn to_vk_sampler_mode(wrapping_mode: &gltf::texture::WrappingMode) -> vk::SamplerAddressMode {
+        match wrapping_mode {
+            gltf::texture::WrappingMode::ClampToEdge => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            gltf::texture::WrappingMode::MirroredRepeat => vk::SamplerAddressMode::MIRRORED_REPEAT,
+            gltf::texture::WrappingMode::Repeat => vk::SamplerAddressMode::REPEAT,
+        }
     }
 }

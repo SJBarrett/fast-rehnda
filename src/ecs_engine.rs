@@ -1,21 +1,19 @@
-use std::path::Path;
-
 use bevy_app::App;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ShouldRun;
 use egui::epaint::Shadow;
 use egui::Visuals;
-use glam::{EulerRot, Quat};
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::event::WindowEvent;
-use winit::event_loop::{EventLoopWindowTarget};
+use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 
-use crate::etna::{CommandPool, Device, DeviceRes, draw_system, FrameRenderContext, Instance, material_pipeline, PhysicalDevice, PhysicalDeviceRes, Surface, Swapchain, swapchain_systems};
+use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance, PhysicalDevice, Surface, Swapchain, swapchain_systems};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::rehnda_core::{LongLivedObject, Mat4, Vec3};
-use crate::scene::{AssetManager, Camera, Model, RenderObject};
+use crate::rehnda_core::LongLivedObject;
+use crate::scene::AssetManager;
+use crate::scene::demo_scenes;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {
@@ -48,7 +46,7 @@ impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
         Self::initialise_rendering_resources(&mut app, window, event_loop);
-        app.add_startup_system(scene_init_system);
+        app.add_startup_system(demo_scenes::gltf_test_scene);
         app.add_system_set(SystemSet::new()
             .label(RenderLabel)
             .with_run_criteria(should_render)
@@ -119,37 +117,6 @@ impl EcsEngine {
         let winit_state = &mut world.non_send_resource_mut::<egui_winit::State>();
         let _ = winit_state.on_event(&world.non_send_resource::<egui::Context>(), window_event);
     }
-}
-
-fn scene_init_system(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
-    let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 100.0);
-    camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
-    commands.insert_resource(camera);
-    let cube_model = asset_manager.load_gltf(Path::new("assets/models/box/Box.gltf"), &mut descriptor_manager);
-    let viking_model_handle = asset_manager.load_textured_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"), &mut descriptor_manager);
-    let suzanne = asset_manager.load_model(Path::new("assets/suzanne.obj"));
-
-    let textured_material = asset_manager.add_material(material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
-    let non_textured_material = asset_manager.add_material(material_pipeline::non_textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
-
-
-    commands.spawn_batch(vec![
-        (RenderObject {
-            transform: Mat4::IDENTITY,
-            model_handle: viking_model_handle,
-            material_handle: textured_material,
-        }),
-        (RenderObject {
-            transform: Mat4::from_translation(Vec3::new(-3.0, 0.0, 0.0)),
-            model_handle: cube_model,
-            material_handle: non_textured_material,
-        }),
-        (RenderObject {
-            transform: Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (0.0, 1.0, 0.0).into()),
-            model_handle: suzanne,
-            material_handle: non_textured_material,
-        }),
-    ])
 }
 
 fn should_render(window: Res<EtnaWindow>) -> ShouldRun {
