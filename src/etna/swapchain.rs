@@ -204,7 +204,6 @@ fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, exten
 
 pub mod swapchain_systems {
     use bevy_ecs::prelude::*;
-    use bevy_ecs::schedule::ShouldRun;
 
     use crate::ecs_engine::EtnaWindow;
     use crate::etna::{CommandPool, PhysicalDeviceRes, Surface, Swapchain};
@@ -215,11 +214,7 @@ pub mod swapchain_systems {
         camera.update_aspect_ratio(swapchain.aspect_ratio());
     }
 
-    pub fn swap_chain_needs_recreation(swapchain: Res<Swapchain>) -> ShouldRun {
-        if swapchain.needs_recreation {
-            ShouldRun::Yes
-        } else {
-            ShouldRun::No
-        }
+    pub fn swap_chain_needs_recreation(swapchain: Res<Swapchain>) -> bool {
+        swapchain.needs_recreation
     }
 }

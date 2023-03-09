@@ -1,6 +1,5 @@
 use bevy_app::App;
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ShouldRun;
 use egui::epaint::Shadow;
 use egui::Visuals;
 use log::info;
@@ -37,23 +36,16 @@ impl EtnaWindow {
     }
 }
 
-#[derive(SystemLabel)]
-pub struct RenderLabel;
-#[derive(SystemLabel)]
-pub struct UiLabel;
-
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
         Self::initialise_rendering_resources(&mut app, window, event_loop);
         app.add_startup_system(demo_scenes::gltf_test_scene);
-        app.add_system_set(SystemSet::new()
-            .label(RenderLabel)
-            .with_run_criteria(should_render)
-            .with_system(ui_builder_system)
-            .with_system(draw_system.after(ui_builder_system))
-        );
-        app.add_system(swapchain_systems::swap_chain_recreation_system.with_run_criteria(swapchain_systems::swap_chain_needs_recreation).after(draw_system));
+        app.add_systems((
+            ui_builder_system.run_if(should_render),
+            draw_system.after(ui_builder_system).run_if(should_render),
+            swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system)
+        ));
         EcsEngine {
             app,
         }
@@ -119,12 +111,8 @@ impl EcsEngine {
     }
 }
 
-fn should_render(window: Res<EtnaWindow>) -> ShouldRun {
-    if window.is_minimized() {
-        ShouldRun::No
-    } else {
-        ShouldRun::Yes
-    }
+fn should_render(window: Res<EtnaWindow>) -> bool {
+    !window.is_minimized()
 }
 
 impl Drop for EcsEngine {
