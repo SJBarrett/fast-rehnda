@@ -40,3 +40,6 @@ ahash = "0.8.3"
 [build-dependencies]
 shaderc = "0.8.2"
 glob = "0.3.1"
+
+[profile.dev.package."*"] # Set the default for dependencies in Development mode.
+opt-level = 3

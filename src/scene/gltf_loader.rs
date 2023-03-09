@@ -1,6 +1,7 @@
-use std::{fs, io};
+use std::{fs, io, mem};
 use std::fmt::Debug;
 use std::io::Read;
+use std::mem::MaybeUninit;
 use std::ops::Index;
 use std::path::Path;
 
@@ -8,7 +9,7 @@ use ahash::AHashMap;
 use ash::vk;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat};
-use gltf::{Accessor, Gltf, Node, Primitive, Scene, Semantic};
+use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
 use gltf::buffer;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout};
@@ -17,8 +18,8 @@ use log::info;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ConstPtr, Vec2, Vec3};
-use crate::scene::{Model, Vertex};
-use crate::scene::render_object::{MultiMeshModel, Mesh};
+use crate::scene::Vertex;
+use crate::scene::render_object::{Mesh, MultiMeshModel};
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();
@@ -145,15 +146,20 @@ impl<'a> PrimitiveAttributes<'a> {
 }
 
 struct SourcesData {
-    buffer_data: Vec<Vec<u8>>,
+    buffer_data: Vec<u8>,
+    buffer_offsets: Vec<usize>,
     images: Vec<DynamicImage>,
 }
 
 impl SourcesData {
     fn load_data_into_memory(gltf: &Gltf, working_dir: &Path) -> Self {
-        let mut buffer_sources: Vec<Vec<u8>> = Vec::with_capacity(gltf.buffers().len());
+        let buffer_data_temp: Vec<MaybeUninit<u8>> = vec![MaybeUninit::<u8>::uninit(); gltf.buffers().map(|buffer| buffer.length()).sum()];
+        let mut buffer_data: Vec<u8> = unsafe { mem::transmute(buffer_data_temp) };
+        let mut buffer_offsets: Vec<usize> = Vec::with_capacity(gltf.buffers().len());
         for buffer in gltf.buffers() {
-            let mut buffer_data: Vec<u8> = vec![0; buffer.length()];
+            let offset = buffer_offsets.iter().sum();
+            let buffer_end = offset + buffer.length();
+            buffer_offsets.push(offset);
             match buffer.source() {
                 buffer::Source::Bin => {
                     todo!("Support BIN buffer source for gltf")
@@ -161,10 +167,9 @@ impl SourcesData {
                 buffer::Source::Uri(uri) => {
                     let uri_path = working_dir.join(Path::new(uri));
                     let mut buffer_file = fs::File::open(uri_path).expect("Failed to open GLTF buffer source file");
-                    buffer_file.read_exact(buffer_data.as_mut_slice()).expect("Failed to read buffer into vec");
+                    buffer_file.read_exact(&mut buffer_data[offset..buffer_end]).expect("Failed to read buffer into vec");
                 }
             }
-            buffer_sources.insert(buffer.index(), buffer_data);
         }
 
         let mut images: Vec<DynamicImage> = Vec::with_capacity(gltf.images().len());
@@ -187,13 +192,20 @@ impl SourcesData {
         }
 
         SourcesData {
-            buffer_data: buffer_sources,
+            buffer_data,
+            buffer_offsets,
             images,
         }
     }
 
     fn buffer_ref(&self, index: usize) -> &[u8] {
-        self.buffer_data[index].as_slice()
+        let offset = self.buffer_offsets[index];
+        let end_of_buffer = if index == self.buffer_offsets.len() - 1 {
+            self.buffer_data.len()
+        } else {
+            self.buffer_offsets[index + 1]
+        };
+        &self.buffer_data[offset..end_of_buffer]
     }
 }
 

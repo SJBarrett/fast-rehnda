@@ -38,7 +38,7 @@ pub fn multi_object_test_scene(mut commands: Commands, swapchain: Res<Swapchain>
 
 pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 100.0);
-    camera.transform = Mat4::look_at_rh(Vec3::new(2.0, 6.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+    camera.transform = Mat4::look_at_rh(Vec3::new(1.0, 6.0, 2.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
     commands.insert_resource(camera);
 
     // let path = Path::new("assets/models/BoxTextured/glTF/BoxTextured.gltf");
