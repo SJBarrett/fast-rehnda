@@ -9,7 +9,7 @@ use ahash::AHashMap;
 use ash::vk;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat};
-use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
+use gltf::{Accessor, Gltf, import, Node, Primitive, Semantic};
 use gltf::buffer;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout};
@@ -23,6 +23,7 @@ use crate::scene::render_object::{Mesh, MultiMeshModel};
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();
+    let start_import = std::time::Instant::now();
     let gltf = read_gltf_file(gltf_path);
     let sources_data = SourcesData::load_data_into_memory(&gltf, working_dir);
     let mut meshes: Vec<Mesh> = Vec::new();
@@ -38,7 +39,7 @@ pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, com
         }
     }
 
-    info!("Loaded gltf model with {} meshes", gltf.meshes().len());
+    info!("Loaded gltf model with {} meshes. Took {} ms", gltf.meshes().len(), start_import.elapsed().as_millis());
     MultiMeshModel {
         meshes
     }
@@ -119,7 +120,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 }
 
 struct PrimitiveAttributes<'a> {
-    data_buffers: &'a SourcesData,
+    data_buffers: &'a SourcesData<'a>,
     semantic_accessors: AHashMap<Semantic, Accessor<'a>>,
     indices_accessor: BufferAccessor<'a, u16>,
     vertex_count: usize,
@@ -145,32 +146,49 @@ impl<'a> PrimitiveAttributes<'a> {
     }
 }
 
-struct SourcesData {
-    buffer_data: Vec<u8>,
+enum BufferData<'a> {
+    Source(SourceBuffers),
+    Bin(&'a Vec<u8>),
+}
+
+struct SourceBuffers {
+    data: Vec<u8>,
     buffer_offsets: Vec<usize>,
+}
+
+struct SourcesData<'a> {
+    buffer_data: BufferData<'a>,
     images: Vec<DynamicImage>,
 }
 
-impl SourcesData {
-    fn load_data_into_memory(gltf: &Gltf, working_dir: &Path) -> Self {
+impl<'a> SourcesData<'a> {
+    fn load_data_into_memory(gltf: &'a Gltf, working_dir: &Path) -> Self {
         let buffer_data_temp: Vec<MaybeUninit<u8>> = vec![MaybeUninit::<u8>::uninit(); gltf.buffers().map(|buffer| buffer.length()).sum()];
-        let mut buffer_data: Vec<u8> = unsafe { mem::transmute(buffer_data_temp) };
-        let mut buffer_offsets: Vec<usize> = Vec::with_capacity(gltf.buffers().len());
-        for buffer in gltf.buffers() {
-            let offset = buffer_offsets.iter().sum();
-            let buffer_end = offset + buffer.length();
-            buffer_offsets.push(offset);
-            match buffer.source() {
-                buffer::Source::Bin => {
-                    todo!("Support BIN buffer source for gltf")
-                }
-                buffer::Source::Uri(uri) => {
-                    let uri_path = working_dir.join(Path::new(uri));
-                    let mut buffer_file = fs::File::open(uri_path).expect("Failed to open GLTF buffer source file");
-                    buffer_file.read_exact(&mut buffer_data[offset..buffer_end]).expect("Failed to read buffer into vec");
+        let buffer_data = if let Some(bin) = &gltf.blob {
+            BufferData::Bin(bin)
+        } else {
+            let mut buffer_data: Vec<u8> = unsafe { mem::transmute(buffer_data_temp) };
+            let mut buffer_offsets: Vec<usize> = Vec::with_capacity(gltf.buffers().len());
+            for buffer in gltf.buffers() {
+                let offset = buffer_offsets.iter().sum();
+                let buffer_end = offset + buffer.length();
+                buffer_offsets.push(offset);
+                match buffer.source() {
+                    buffer::Source::Bin => {
+                        unreachable!("Bin data is handled prior to this branch");
+                    }
+                    buffer::Source::Uri(uri) => {
+                        let uri_path = working_dir.join(Path::new(uri));
+                        let mut buffer_file = fs::File::open(uri_path).expect("Failed to open GLTF buffer source file");
+                        buffer_file.read_exact(&mut buffer_data[offset..buffer_end]).expect("Failed to read buffer into vec");
+                    }
                 }
             }
-        }
+            BufferData::Source(SourceBuffers {
+                data: buffer_data,
+                buffer_offsets,
+            })
+        };
 
         let mut images: Vec<DynamicImage> = Vec::with_capacity(gltf.images().len());
         for image in gltf.images() {
@@ -179,7 +197,15 @@ impl SourcesData {
                     view,
                     mime_type,
                 } => {
-                    todo!("Image source type of View not yet supported")
+                    match &buffer_data {
+                        BufferData::Source(_) => {
+                            todo!()
+                        }
+                        BufferData::Bin(data) => {
+                            let data = &data[view.offset()..view.offset()+view.length()];
+                            image::load_from_memory(data).expect("Failed to build image from Bin data")
+                        }
+                    }
                 }
                 gltf::image::Source::Uri {
                     uri,
@@ -193,19 +219,25 @@ impl SourcesData {
 
         SourcesData {
             buffer_data,
-            buffer_offsets,
             images,
         }
     }
 
     fn buffer_ref(&self, index: usize) -> &[u8] {
-        let offset = self.buffer_offsets[index];
-        let end_of_buffer = if index == self.buffer_offsets.len() - 1 {
-            self.buffer_data.len()
-        } else {
-            self.buffer_offsets[index + 1]
-        };
-        &self.buffer_data[offset..end_of_buffer]
+        match &self.buffer_data {
+            BufferData::Source(sources_data) => {
+                let offset = sources_data.buffer_offsets[index];
+                let end_of_buffer = if index == sources_data.buffer_offsets.len() - 1 {
+                    sources_data.data.len()
+                } else {
+                    sources_data.buffer_offsets[index + 1]
+                };
+                &sources_data.data[offset..end_of_buffer]
+            }
+            BufferData::Bin(bin) => {
+                bin.as_slice()
+            }
+        }
     }
 }
 

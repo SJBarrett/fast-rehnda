@@ -64,6 +64,10 @@ impl CameraUiState {
     }
 
     fn update_scene(&self, camera: &mut Camera) {
-        camera.transform = Mat4::from_scale_rotation_translation(self.scale, Quat::from_euler(EulerRot::XYZ, self.rotation.x.to_radians(), self.rotation.y.to_radians(), self.rotation.z.to_radians()), self.translation);
+        camera.transform = Mat4::from_scale_rotation_translation(
+            self.scale,
+            Quat::from_euler(EulerRot::XYZ, self.rotation.x.to_radians(), self.rotation.y.to_radians(), self.rotation.z.to_radians()),
+            self.translation
+        );
     }
 }

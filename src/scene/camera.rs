@@ -19,9 +19,16 @@ pub struct Camera {
     z_far: f32,
 }
 
+const OPENGL_TO_VULKAN_MATRIX: Mat4 = Mat4::from_cols_array(&[
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+]);
+
 impl Camera {
     pub fn new(fov_y_degrees: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> Camera {
-        let mut projection = Mat4::perspective_rh(fov_y_degrees.to_radians(), aspect_ratio, z_near, z_far);
+        let mut projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh(fov_y_degrees.to_radians(), aspect_ratio, z_near, z_far);
         projection.y_axis[1] *= -1.0;
         Camera {
             transform: Mat4::IDENTITY,
