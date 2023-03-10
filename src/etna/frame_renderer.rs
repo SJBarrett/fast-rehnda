@@ -178,7 +178,7 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
 }
 
 fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, render_object: &RenderObject) {
-    let transform = mesh.relative_transform * render_object.global_transform;
+    let transform = render_object.global_transform * mesh.relative_transform;
     let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&transform));
     unsafe {
         device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);

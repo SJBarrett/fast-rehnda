@@ -11,7 +11,7 @@ use crate::scene::render_object::RenderObject;
 
 pub fn multi_object_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
-    camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
+    // camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
     commands.insert_resource(camera);
     let viking_model_handle = asset_manager.load_textured_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"), &mut descriptor_manager);
     let suzanne = asset_manager.load_model(Path::new("assets/suzanne.obj"));
@@ -36,13 +36,18 @@ pub fn multi_object_test_scene(mut commands: Commands, swapchain: Res<Swapchain>
     ])
 }
 
+#[derive(Component)]
+pub struct Actor {
+    pub name: String,
+}
+
 pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
     // camera.transform = Mat4::look_at_rh(Vec3::new(-6.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
-    camera.transform = Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::from_euler(EulerRot::XYZ, 0.0, 0.0, 0.0), (0.0, 0.0, -0.2).into());
+    // camera.transform = Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::from_euler(EulerRot::XYZ, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0).into());
     commands.insert_resource(camera);
 
-    let path = Path::new("../glTF-Sample-Models/2.0/BoomBoxWithAxes/glTF/BoomBoxWithAxes.gltf");
+    let path = Path::new("../glTF-Sample-Models/2.0/Duck/glTF/Duck.gltf");
     let gltf_model = asset_manager.load_gltf(path, &mut descriptor_manager);
 
     let textured_material = asset_manager.add_material(
@@ -51,10 +56,22 @@ pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut as
 
     commands.spawn_batch(vec![
         (RenderObject {
-            global_transform: Mat4::IDENTITY,
+            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
             relative_transform: Default::default(),
-            model_handle: gltf_model,
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/BoomBoxWithAxes/glTF/BoomBoxWithAxes.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
-        })
+        }, Actor { name: "BoomBox".into() }),
+        (RenderObject {
+            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (0.0, 0.0, 3.0).into()),
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("assets/models/BoxTextured/glTF/BoxTextured.gltf"), &mut descriptor_manager),
+            material_handle: textured_material,
+        }, Actor { name: "BoxTextured".into() }),
+        (RenderObject {
+            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (3.0, 0.0, 0.0).into()),
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
+            material_handle: textured_material,
+        },  Actor { name: "AntiqueCamera".into() }),
     ])
 }

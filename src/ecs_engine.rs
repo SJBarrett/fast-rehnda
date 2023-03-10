@@ -1,17 +1,18 @@
 use bevy_app::App;
 use bevy_ecs::prelude::*;
+use bevy_time::TimePlugin;
 use egui::epaint::Shadow;
 use egui::Visuals;
 use log::info;
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use winit::event::WindowEvent;
+use winit::event::{KeyboardInput, WindowEvent};
 use winit::event_loop::EventLoopWindowTarget;
 use winit::window::Window;
 
 use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance, PhysicalDevice, Surface, Swapchain, swapchain_systems};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::LongLivedObject;
-use crate::scene::AssetManager;
+use crate::scene::{AssetManager, camera_input_system};
 use crate::scene::demo_scenes;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
@@ -39,9 +40,12 @@ impl EtnaWindow {
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
+        app.add_plugin(TimePlugin::default());
         Self::initialise_rendering_resources(&mut app, window, event_loop);
+        app.add_event::<winit::event::KeyboardInput>();
         app.add_startup_system(demo_scenes::gltf_test_scene);
         app.add_systems((
+            camera_input_system,
             ui_builder_system.run_if(should_render),
             draw_system.after(ui_builder_system).run_if(should_render),
             swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system)
@@ -107,6 +111,10 @@ impl EcsEngine {
     pub fn handle_window_event(&mut self, window_event: &WindowEvent) {
         let world = self.app.world.cell();
         let winit_state = &mut world.non_send_resource_mut::<egui_winit::State>();
+        if let WindowEvent::KeyboardInput { input, .. } = window_event {
+            world.send_event(*input);
+        }
+
         let _ = winit_state.on_event(&world.non_send_resource::<egui::Context>(), window_event);
     }
 }
