@@ -34,7 +34,7 @@ const OPENGL_TO_VULKAN_MATRIX: Mat4 = Mat4::from_cols_array(&[
 
 impl Camera {
     pub fn new(fov_y_degrees: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> Camera {
-        let mut projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh(fov_y_degrees.to_radians(), aspect_ratio, z_near, z_far);
+        let mut projection = Mat4::perspective_rh_gl(fov_y_degrees.to_radians(), aspect_ratio, z_near, z_far);
         projection.y_axis[1] *= -1.0;
         Camera {
             up: (0.0, 1.0, 0.0).into(),
@@ -51,7 +51,7 @@ impl Camera {
     }
 
     pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
-        self.projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh(self.fov_y, aspect_ratio, self.z_near, self.z_far);
+        self.projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh_gl(self.fov_y, aspect_ratio, self.z_near, self.z_far);
         self.projection.y_axis[1] *= -1.0;
     }
 
@@ -64,8 +64,8 @@ impl Camera {
 }
 
 pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, mut keyboard_events: EventReader<KeyboardInput>) {
-    let movement_speed= time.delta_seconds() * 5.0;
-    let rotation_speed = time.delta_seconds() * 100.0;
+    let movement_speed= time.delta_seconds() * 50.0;
+    let rotation_speed = time.delta_seconds() * 200.0;
     let facing_direction = camera.front;
     let up = camera.up;
     for input in keyboard_events.iter() {

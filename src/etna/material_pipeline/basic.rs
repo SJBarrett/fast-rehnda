@@ -11,7 +11,10 @@ use crate::etna::shader::ShaderModule;
 use crate::scene::{Vertex};
 
 pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> MaterialPipeline {
-    let descriptor_set_layout = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT));
+    let base_color_texture_sampler_layout = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[
+        layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(1, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT),
+    ]);
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/shader.vert_spv"));
     let frag_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/shader.frag_spv"));
     let main_function_name = CString::new("main").unwrap();
@@ -44,7 +47,7 @@ pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Desc
 
     let create_info = PipelineCreateInfo {
         global_set_layouts: &[descriptor_manager.global_descriptor_layout],
-        additional_descriptor_set_layouts: &[descriptor_set_layout],
+        additional_descriptor_set_layouts: &[base_color_texture_sampler_layout],
         shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],
         push_constants: &[push_constant],
         extent: swapchain.extent,

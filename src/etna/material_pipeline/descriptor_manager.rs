@@ -16,7 +16,7 @@ impl DescriptorManager {
     pub fn create(device: ConstPtr<Device>) -> DescriptorManager {
         let allocator = DescriptorAllocator::create(device);
         let mut layout_cache = DescriptorLayoutCache::create(device);
-        let global_descriptor_layout = layout_cache.create_descriptor_layout_for_binding(&layout_binding(0, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX));
+        let global_descriptor_layout = layout_cache.create_descriptor_layout_for_binding(&[layout_binding(0, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX)]);
         DescriptorManager {
             allocator,
             layout_cache,

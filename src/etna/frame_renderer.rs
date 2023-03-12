@@ -8,7 +8,7 @@ use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateI
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
 use crate::scene::{AssetManager, Camera, MaterialHandle, MeshHandle, Model, ModelHandle, ViewProjectionMatrices};
-use crate::scene::render_object::{Mesh, MultiMeshModel, RenderObject};
+use crate::scene::render_object::{Material, Mesh, MultiMeshModel, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -169,10 +169,13 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
     unsafe {
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
         device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT16);
-        if let Some(model_texture) = &mesh.texture {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, model_texture.descriptor_set], &[]);
-        } else {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
+        match &mesh.material {
+            Material::Standard(std_material) => {
+                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set], &[]);
+            }
+            _ => {
+                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
+            }
         }
     }
 }

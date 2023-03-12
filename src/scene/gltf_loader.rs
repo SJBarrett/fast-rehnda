@@ -7,39 +7,42 @@ use std::path::Path;
 
 use ahash::AHashMap;
 use ash::vk;
+use bevy_ecs::prelude::info;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat};
-use gltf::{Accessor, Gltf, import, Node, Primitive, Semantic};
+use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
 use gltf::buffer;
+use gltf::json::accessor::ComponentType;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout};
 use log::info;
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::rehnda_core::{ConstPtr, Vec2, Vec3};
+use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3};
 use crate::scene::Vertex;
-use crate::scene::render_object::{Mesh, MultiMeshModel};
+use crate::scene::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();
-    let start_import = std::time::Instant::now();
     let gltf = read_gltf_file(gltf_path);
     let sources_data = SourcesData::load_data_into_memory(&gltf, working_dir);
     let mut meshes: Vec<Mesh> = Vec::new();
     for mesh in gltf.meshes() {
         for primitive in mesh.primitives() {
-            meshes.push(build_mesh_from_primitives(device, physical_device, command_pool, descriptor_manager, &sources_data, primitive));
+            meshes.push(build_mesh_from_primitives(device, physical_device, command_pool, descriptor_manager, &sources_data, primitive, &mesh));
         }
     }
 
     if let Some(scene) = gltf.scenes().nth(0) {
         for scene_node in scene.nodes() {
-            update_transforms(&mut meshes, &scene_node, gltf_transform_to_mat4(scene_node.transform()));
+            update_transforms(&mut meshes, &scene_node, Mat4::IDENTITY);
         }
     }
 
-    info!("Loaded gltf model with {} meshes. Took {} ms", gltf.meshes().len(), start_import.elapsed().as_millis());
+    for mesh in &meshes {
+        info!("Mesh {}: {:?}", mesh.name, mesh.relative_transform.to_scale_rotation_translation())
+    }
     MultiMeshModel {
         meshes
     }
@@ -62,7 +65,7 @@ fn gltf_transform_to_mat4(transform: Transform) -> Mat4 {
     }
 }
 
-fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, primitive: Primitive) -> Mesh {
+fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, primitive: Primitive, gltf_mesh: &gltf::mesh::Mesh) -> Mesh {
     let material = primitive.material();
     let base_color_texture = material.pbr_metallic_roughness().base_color_texture();
     let base_color_tex_coord_index = base_color_texture.as_ref().map(|base_color_texture| base_color_texture.tex_coord());
@@ -74,16 +77,23 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
     let base_color_tex_coord_accessor = base_color_tex_coord_index.and_then(|index| primitive_attributes.attribute_accessor::<Vec2>(Semantic::TexCoords(index)));
 
     let vertices: Vec<Vertex> = (0..primitive_attributes.vertex_count)
-        .map(|i| Vertex {
-            position: position_accessor.data_at_index(i),
-            normal: normal_accessor.data_at_index(i),
-            texture_coord: base_color_tex_coord_accessor.as_ref().map_or(Vec2::ZERO, |accessor| accessor.data_at_index(i)),
+        .map(|i| {
+            let mut position = position_accessor.data_at_index(i);
+            Vertex {
+                position,
+                normal: normal_accessor.data_at_index(i),
+                texture_coord: base_color_tex_coord_accessor.as_ref().map_or(Vec2::ZERO, |accessor| accessor.data_at_index(i)),
+            }
         })
         .collect();
 
     let indices: Vec<u16> = (0..primitive_attributes.index_count)
-        .map(|i| primitive_attributes.indices_accessor.data_at_index(i))
+        .map(|i| match &primitive_attributes.indices_accessor {
+            IndexAccessor::U8(accessor) => {accessor.data_at_index(i) as u16}
+            IndexAccessor::U16(accessor) => {accessor.data_at_index(i)}
+        })
         .collect();
+
 
     let base_color_texture = base_color_texture.as_ref().map(|texture| {
         let image = data_buffers.images[texture.texture().index()].to_rgba8();
@@ -92,9 +102,25 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
             width: image.width(),
             height: image.height(),
-            mip_levels: None,
+            mip_levels: Some((image.width().max(image.height())).ilog2() + 1),
             data: image.as_bytes(),
             sampler_info: SamplerOptions::FilterOptions(&sampler_options),
+        })
+    }).unwrap_or_else(|| {
+        let white_data = &ColorRgbaF::WHITE.to_rgba8();
+        let white_img: &[u8] = bytemuck::cast_slice(white_data);
+        Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+            width: 1,
+            height: 1,
+            mip_levels: None,
+            data: white_img,
+            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
+                min_filter: None,
+                mag_filter: None,
+                mip_map_mode: None,
+                address_mode_u: Default::default(),
+                address_mode_v: Default::default(),
+            }),
         })
     });
 
@@ -109,11 +135,14 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         data: index_buffer_data,
         usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
     });
+    let base_color = ColorRgbaF::new_from_array(material.pbr_metallic_roughness().base_color_factor());
+    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, base_color);
 
     Mesh {
+        name: String::from(gltf_mesh.name().unwrap_or("defaultName")),
         vertex_buffer,
         index_buffer,
-        texture: base_color_texture,
+        material: Material::Standard(material),
         index_count: indices.len() as u32,
         relative_transform: Mat4::IDENTITY,
     }
@@ -122,7 +151,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 struct PrimitiveAttributes<'a> {
     data_buffers: &'a SourcesData<'a>,
     semantic_accessors: AHashMap<Semantic, Accessor<'a>>,
-    indices_accessor: BufferAccessor<'a, u16>,
+    indices_accessor: IndexAccessor<'a>,
     vertex_count: usize,
     index_count: usize,
 }
@@ -131,7 +160,11 @@ impl<'a> PrimitiveAttributes<'a> {
     fn new(primitive: &Primitive<'a>, data_buffers: &'a SourcesData) -> Self {
         let semantic_accessors: AHashMap<Semantic, Accessor<'a>> = primitive.attributes().map(|attribute| (attribute.0, attribute.1)).collect();
         let vertex_count = semantic_accessors.get(&Semantic::Positions).unwrap().count();
-        let indices_accessor: BufferAccessor<u16> = BufferAccessor::new(data_buffers, &primitive.indices().expect("Expected indices to be present for a GLTF mesh"));
+        let indices_accessor = match primitive.indices().unwrap().data_type() {
+            ComponentType::U8 => {IndexAccessor::U8(BufferAccessor::new(data_buffers, &primitive.indices().unwrap()))}
+            ComponentType::U16 => {IndexAccessor::U16(BufferAccessor::new(data_buffers, &primitive.indices().unwrap()))}
+            _ => {panic!("Index type other than u8 and u16 are not supported")}
+        };
         PrimitiveAttributes {
             semantic_accessors,
             data_buffers,
@@ -144,6 +177,11 @@ impl<'a> PrimitiveAttributes<'a> {
     fn attribute_accessor<T>(&self, semantic: Semantic) -> Option<BufferAccessor<'a, T>> where T: Pod, T: Zeroable {
         self.semantic_accessors.get(&semantic).map(|accessor| BufferAccessor::new(self.data_buffers, accessor))
     }
+}
+
+enum IndexAccessor<'a> {
+    U8(BufferAccessor<'a, u8>),
+    U16(BufferAccessor<'a, u16>),
 }
 
 enum BufferData<'a> {
@@ -202,7 +240,7 @@ impl<'a> SourcesData<'a> {
                             todo!()
                         }
                         BufferData::Bin(data) => {
-                            let data = &data[view.offset()..view.offset()+view.length()];
+                            let data = &data[view.offset()..view.offset() + view.length()];
                             image::load_from_memory(data).expect("Failed to build image from Bin data")
                         }
                     }
@@ -211,7 +249,9 @@ impl<'a> SourcesData<'a> {
                     uri,
                     mime_type,
                 } => {
-                    image::open(working_dir.join(Path::new(uri))).expect("Failed to open gltf image")
+                    let decoded = urlencoding::decode(uri).unwrap();
+                    let img_path = working_dir.join(Path::new(decoded.as_ref()));
+                    image::open(img_path).expect("Failed to open gltf image")
                 }
             };
             images.push(image);

@@ -33,21 +33,21 @@ impl AssetManager {
         }
     }
 
-    pub fn load_textured_model(&mut self, obj_path: &Path, texture_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
-        let model = Model::load_textured_obj(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, obj_path, texture_path);
-        let handle = ModelHandle::new(self.models.len() as u32);
-        let meshes = self.load_meshes_for_model(model);
-        self.models.insert(handle, meshes);
-        handle
-    }
-
-    pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
-        let model = Model::load_obj(self.device, &self.resource_command_pool, obj_path);
-        let handle = ModelHandle::new(self.models.len() as u32);
-        let meshes = self.load_meshes_for_model(model);
-        self.models.insert(handle, meshes);
-        handle
-    }
+    // pub fn load_textured_model(&mut self, obj_path: &Path, texture_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
+    //     let model = Model::load_textured_obj(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, obj_path, texture_path);
+    //     let handle = ModelHandle::new(self.models.len() as u32);
+    //     let meshes = self.load_meshes_for_model(model);
+    //     self.models.insert(handle, meshes);
+    //     handle
+    // }
+    //
+    // pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
+    //     let model = Model::load_obj(self.device, &self.resource_command_pool, obj_path);
+    //     let handle = ModelHandle::new(self.models.len() as u32);
+    //     let meshes = self.load_meshes_for_model(model);
+    //     self.models.insert(handle, meshes);
+    //     handle
+    // }
 
     fn load_meshes_for_model(&mut self, model: MultiMeshModel) -> Vec<MeshHandle> {
         model.meshes.into_iter().map(|mesh| {

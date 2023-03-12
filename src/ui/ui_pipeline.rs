@@ -12,7 +12,7 @@ use crate::etna::shader::ShaderModule;
 use crate::rehnda_core::ConstPtr;
 
 pub fn egui_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> UiPipeline {
-    let texture_binding_description = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT));
+    let texture_binding_description = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)]);
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.vert_spv"));
     let frag_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/egui.frag_spv"));
     let main_function_name = CString::new("main").unwrap();

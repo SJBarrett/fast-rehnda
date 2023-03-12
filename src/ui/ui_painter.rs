@@ -1,5 +1,6 @@
 use ahash::AHashMap;
 use ash::vk;
+use ash::vk::DescriptorSet;
 use bevy_ecs::prelude::Resource;
 use egui::{ClippedPrimitive, Color32, ImageData, Rect, TextureId, TextureOptions, TexturesDelta};
 use egui::epaint::{Primitive, Vertex};
@@ -15,7 +16,7 @@ pub struct UiPainter {
     device: ConstPtr<Device>,
     descriptor_manager: DescriptorManager,
     pipeline: UiPipeline,
-    textures: AHashMap<TextureId, Texture>,
+    textures: AHashMap<TextureId, (Texture, vk::DescriptorSet)>,
     texture_free_queue: Vec<Texture>,
     ui_meshes: Vec<UiMesh>,
     mesh_destroy_queue: Vec<HostMappedBuffer>,
@@ -52,8 +53,8 @@ impl UiPainter {
         }
     }
 
-    fn create_ui_texture(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, physical_device: &PhysicalDevice, command_pool: &CommandPool, size: &[usize; 2], texture_options: &TextureOptions, data: &[u8]) -> Texture {
-        Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+    fn create_ui_texture(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, physical_device: &PhysicalDevice, command_pool: &CommandPool, size: &[usize; 2], texture_options: &TextureOptions, data: &[u8]) -> (Texture, DescriptorSet) {
+        let texture = Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
             width: size[0] as _,
             height: size[1] as _,
             mip_levels: None,
@@ -71,7 +72,16 @@ impl UiPainter {
                     .max_lod(vk::LOD_CLAMP_NONE)
                     .build()
             ),
-        })
+        });
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(texture.image.image_view)
+            .sampler(texture.sampler);
+        let (descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
+            .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .build()
+            .expect("Failed to allocate bindings");
+        (texture, descriptor_set)
     }
 
     pub fn update_resources(&mut self, physical_device: &PhysicalDevice, command_pool: &CommandPool, egui_output: &EguiOutput) {
@@ -182,7 +192,7 @@ impl UiPainter {
             unsafe {
                 device.cmd_bind_vertex_buffers(command_buffer, 0, vert_buffers, offsets);
                 device.cmd_bind_index_buffer(command_buffer, ui_mesh.index_buffer.vk_buffer(), 0, vk::IndexType::UINT32);
-                let descriptor_sets = &[self.textures.get(&ui_mesh.texture_id).unwrap().descriptor_set];
+                let descriptor_sets = &[self.textures.get(&ui_mesh.texture_id).unwrap().1];
                 device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.pipeline.pipeline_layout, 0, descriptor_sets, &[]);
                 let screen_size = egui_output.screen_state.size_in_points();
                 let screen_size_data: &[u8] = bytemuck::cast_slice(&screen_size);

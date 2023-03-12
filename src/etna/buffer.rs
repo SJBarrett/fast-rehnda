@@ -41,7 +41,7 @@ impl Buffer {
     }
 
     pub fn create_and_initialize_buffer_with_staging_buffer(device: ConstPtr<etna::Device>, command_pool: &etna::CommandPool, create_info: BufferCreateInfo) -> Buffer {
-        let mut buffer = Self::create_empty_buffer(device, create_info.data.len() as u64, create_info.usage, MemoryLocation::GpuOnly);
+        let mut buffer = Self::create_empty_buffer(device, create_info.data.len() as u64, create_info.usage | vk::BufferUsageFlags::TRANSFER_DST, MemoryLocation::GpuOnly);
         buffer.populate_buffer_using_staging_buffer(command_pool, create_info.data);
         buffer
     }

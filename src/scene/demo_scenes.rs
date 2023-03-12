@@ -13,27 +13,27 @@ pub fn multi_object_test_scene(mut commands: Commands, swapchain: Res<Swapchain>
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
     // camera.transform = Mat4::look_at_rh(Vec3::new(0.0, 8.0, 4.0), Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
     commands.insert_resource(camera);
-    let viking_model_handle = asset_manager.load_textured_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"), &mut descriptor_manager);
-    let suzanne = asset_manager.load_model(Path::new("assets/suzanne.obj"));
-
-    let textured_material = asset_manager.add_material(material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
-    let non_textured_material = asset_manager.add_material(material_pipeline::non_textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
-
-
-    commands.spawn_batch(vec![
-        (RenderObject {
-            global_transform: Mat4::IDENTITY,
-            relative_transform: Default::default(),
-            model_handle: viking_model_handle,
-            material_handle: textured_material,
-        }),
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (0.0, 1.0, 0.0).into()),
-            relative_transform: Default::default(),
-            model_handle: suzanne,
-            material_handle: non_textured_material,
-        }),
-    ])
+    // let viking_model_handle = asset_manager.load_textured_model(Path::new("assets/viking_room.obj"), Path::new("assets/viking_room.png"), &mut descriptor_manager);
+    // let suzanne = asset_manager.load_model(Path::new("assets/suzanne.obj"));
+    //
+    // let textured_material = asset_manager.add_material(material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
+    // let non_textured_material = asset_manager.add_material(material_pipeline::non_textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain));
+    //
+    //
+    // commands.spawn_batch(vec![
+    //     (RenderObject {
+    //         global_transform: Mat4::IDENTITY,
+    //         relative_transform: Default::default(),
+    //         model_handle: viking_model_handle,
+    //         material_handle: textured_material,
+    //     }),
+    //     (RenderObject {
+    //         global_transform: Mat4::from_scale_rotation_translation((0.5, 0.5, 0.5).into(), Quat::from_euler(EulerRot::XYZ, 90.0f32.to_radians(), 180.0f32.to_radians(), 0.0), (0.0, 1.0, 0.0).into()),
+    //         relative_transform: Default::default(),
+    //         model_handle: suzanne,
+    //         material_handle: non_textured_material,
+    //     }),
+    // ])
 }
 
 #[derive(Component)]
@@ -56,22 +56,22 @@ pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut as
 
     commands.spawn_batch(vec![
         (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
+            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (30.0, 0.0, 0.0).into()),
             relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/BoomBoxWithAxes/glTF/BoomBoxWithAxes.gltf"), &mut descriptor_manager),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/OrientationTest/glTF/OrientationTest.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
         }, Actor { name: "BoomBox".into() }),
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (0.0, 0.0, 3.0).into()),
-            relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("assets/models/BoxTextured/glTF/BoxTextured.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
-        }, Actor { name: "BoxTextured".into() }),
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (3.0, 0.0, 0.0).into()),
-            relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
-        },  Actor { name: "AntiqueCamera".into() }),
+        // (RenderObject {
+        //     global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (0.0, 0.0, 3.0).into()),
+        //     relative_transform: Default::default(),
+        //     model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/Box With Spaces/glTF/Box With Spaces.gltf"), &mut descriptor_manager),
+        //     material_handle: textured_material,
+        // }, Actor { name: "BoxTextured".into() }),
+        // (RenderObject {
+        //     global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (3.0, 0.0, 0.0).into()),
+        //     relative_transform: Default::default(),
+        //     model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
+        //     material_handle: textured_material,
+        // },  Actor { name: "AntiqueCamera".into() }),
     ])
 }

@@ -37,10 +37,11 @@ impl DescriptorLayoutCache {
         }
     }
 
-    pub fn create_descriptor_layout_for_binding(&mut self, create_info: &vk::DescriptorSetLayoutBinding) -> vk::DescriptorSetLayout {
-        let bindings = &[*create_info];
+    pub fn create_descriptor_layout_for_binding(&mut self, create_info: &[vk::DescriptorSetLayoutBinding]) -> vk::DescriptorSetLayout {
+        let bindings: Vec<vk::DescriptorSetLayoutBinding> = create_info.iter().map(|ci| *ci).collect();
+        // let bindings = &[*create_info];
         let ci = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(bindings);
+            .bindings(bindings.as_slice());
         self.create_descriptor_layout(&ci)
     }
 
