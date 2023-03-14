@@ -4,6 +4,7 @@ use bytemuck_derive::{Pod, Zeroable};
 use winit::event::{KeyboardInput, VirtualKeyCode};
 
 use crate::rehnda_core::{Mat4, Vec3};
+use crate::rehnda_core::input::{InputState, KeyState};
 
 #[repr(C)]
 #[derive(Zeroable, Pod, Debug, Copy, Clone)]
@@ -64,26 +65,36 @@ impl Camera {
     }
 }
 
-pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, mut keyboard_events: EventReader<KeyboardInput>) {
-    let movement_speed = time.delta_seconds() * 50.0;
-    let rotation_speed = time.delta_seconds() * 200.0;
+pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, input_state: Res<InputState>) {
+    let movement_speed = time.delta_seconds() * 20.0;
+    let rotation_speed = time.delta_seconds() * 80.0;
     let facing_direction = camera.front;
     let up = camera.up;
-    for input in keyboard_events.iter() {
-        match input.virtual_keycode {
-            Some(VirtualKeyCode::W) => camera.position += facing_direction * movement_speed,
-            Some(VirtualKeyCode::S) => camera.position -= facing_direction * movement_speed,
-            Some(VirtualKeyCode::A) => camera.position -= facing_direction.cross(up).normalize() * movement_speed,
-            Some(VirtualKeyCode::D) => camera.position += facing_direction.cross(up) * movement_speed,
-            Some(VirtualKeyCode::Q) => {
-                camera.yaw -= rotation_speed;
-            }
-            Some(VirtualKeyCode::E) => {
-                camera.yaw += rotation_speed;
-            }
-            _ => {}
-        }
+    if input_state.is_down(VirtualKeyCode::W) {
+        camera.position += facing_direction * movement_speed;
     }
+    if input_state.is_down(VirtualKeyCode::S) {
+        camera.position -= facing_direction * movement_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::A) {
+        camera.position -= facing_direction.cross(up).normalize() * movement_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::D) {
+        camera.position += facing_direction.cross(up) * movement_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::Space) {
+        camera.position += up * movement_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::LShift) {
+        camera.position -= up * movement_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::Q) {
+        camera.yaw -= rotation_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::E) {
+        camera.yaw += rotation_speed;
+    }
+
 
     let x = camera.yaw.to_radians().cos() * camera.pitch.to_radians().cos();
     let y = camera.pitch.to_radians().sin();

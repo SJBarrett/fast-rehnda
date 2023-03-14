@@ -26,8 +26,20 @@ impl InputState {
         self.key_state.get(&key_code).map_or(KeyState::Up, |a| *a)
     }
 
+    pub fn is_down(&self, key_code: VirtualKeyCode) -> bool {
+        self.key_state.get(&key_code).map_or(false, |a| *a == KeyState::Down)
+    }
+
     pub fn key_state_change(&self, key_code: VirtualKeyCode) -> KeyStateChange {
         self.key_state_change.get(&key_code).map_or(KeyStateChange::None, |a| *a)
+    }
+
+    pub fn is_just_down(&self, key_code: VirtualKeyCode) -> bool {
+        self.key_state_change.get(&key_code).map_or(false, |a| *a == KeyStateChange::JustDown)
+    }
+
+    pub fn is_just_up(&self, key_code: VirtualKeyCode) -> bool {
+        self.key_state_change.get(&key_code).map_or(false, |a| *a == KeyStateChange::JustUp)
     }
 }
 
