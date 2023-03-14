@@ -7,8 +7,8 @@ use bevy_ecs::prelude::*;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::{AssetManager, Camera, MaterialHandle, MeshHandle, Model, ModelHandle, ViewProjectionMatrices};
-use crate::scene::render_object::{Material, Mesh, MultiMeshModel, RenderObject};
+use crate::scene::{AssetManager, Camera, MaterialHandle, MeshHandle, ViewProjectionMatrices};
+use crate::scene::render_object::{Material, Mesh, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;

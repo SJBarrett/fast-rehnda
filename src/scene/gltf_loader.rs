@@ -7,7 +7,6 @@ use std::path::Path;
 
 use ahash::AHashMap;
 use ash::vk;
-use bevy_ecs::prelude::info;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat};
 use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
@@ -15,13 +14,12 @@ use gltf::buffer;
 use gltf::json::accessor::ComponentType;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout};
-use log::info;
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3};
-use crate::scene::Vertex;
 use crate::scene::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
+use crate::scene::Vertex;
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();
@@ -40,9 +38,6 @@ pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, com
         }
     }
 
-    for mesh in &meshes {
-        info!("Mesh {}: {:?}", mesh.name, mesh.relative_transform.to_scale_rotation_translation())
-    }
     MultiMeshModel {
         meshes
     }
@@ -89,8 +84,8 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 
     let indices: Vec<u16> = (0..primitive_attributes.index_count)
         .map(|i| match &primitive_attributes.indices_accessor {
-            IndexAccessor::U8(accessor) => {accessor.data_at_index(i) as u16}
-            IndexAccessor::U16(accessor) => {accessor.data_at_index(i)}
+            IndexAccessor::U8(accessor) => { accessor.data_at_index(i) as u16 }
+            IndexAccessor::U16(accessor) => { accessor.data_at_index(i) }
         })
         .collect();
 
@@ -161,9 +156,9 @@ impl<'a> PrimitiveAttributes<'a> {
         let semantic_accessors: AHashMap<Semantic, Accessor<'a>> = primitive.attributes().map(|attribute| (attribute.0, attribute.1)).collect();
         let vertex_count = semantic_accessors.get(&Semantic::Positions).unwrap().count();
         let indices_accessor = match primitive.indices().unwrap().data_type() {
-            ComponentType::U8 => {IndexAccessor::U8(BufferAccessor::new(data_buffers, &primitive.indices().unwrap()))}
-            ComponentType::U16 => {IndexAccessor::U16(BufferAccessor::new(data_buffers, &primitive.indices().unwrap()))}
-            _ => {panic!("Index type other than u8 and u16 are not supported")}
+            ComponentType::U8 => { IndexAccessor::U8(BufferAccessor::new(data_buffers, &primitive.indices().unwrap())) }
+            ComponentType::U16 => { IndexAccessor::U16(BufferAccessor::new(data_buffers, &primitive.indices().unwrap())) }
+            _ => { panic!("Index type other than u8 and u16 are not supported") }
         };
         PrimitiveAttributes {
             semantic_accessors,

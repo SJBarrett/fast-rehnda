@@ -7,9 +7,8 @@ use bevy_ecs::system::Resource;
 use crate::etna::{CommandPool, Device, PhysicalDevice};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::{gltf_loader, Model};
+use crate::scene::gltf_loader;
 use crate::scene::render_object::{Mesh, MultiMeshModel};
-
 
 #[derive(Resource)]
 pub struct AssetManager {
@@ -33,21 +32,13 @@ impl AssetManager {
         }
     }
 
-    // pub fn load_textured_model(&mut self, obj_path: &Path, texture_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
-    //     let model = Model::load_textured_obj(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, obj_path, texture_path);
-    //     let handle = ModelHandle::new(self.models.len() as u32);
-    //     let meshes = self.load_meshes_for_model(model);
-    //     self.models.insert(handle, meshes);
-    //     handle
-    // }
-    //
-    // pub fn load_model(&mut self, obj_path: &Path) -> ModelHandle {
-    //     let model = Model::load_obj(self.device, &self.resource_command_pool, obj_path);
-    //     let handle = ModelHandle::new(self.models.len() as u32);
-    //     let meshes = self.load_meshes_for_model(model);
-    //     self.models.insert(handle, meshes);
-    //     handle
-    // }
+    pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
+        let model = gltf_loader::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
+        let handle = ModelHandle::new(self.models.len() as u32);
+        let meshes = self.load_meshes_for_model(model);
+        self.models.insert(handle, meshes);
+        handle
+    }
 
     fn load_meshes_for_model(&mut self, model: MultiMeshModel) -> Vec<MeshHandle> {
         model.meshes.into_iter().map(|mesh| {
@@ -55,14 +46,6 @@ impl AssetManager {
             self.meshes.insert(mesh_handle, mesh);
             mesh_handle
         }).collect()
-    }
-
-    pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
-        let model = gltf_loader::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
-        let handle = ModelHandle::new(self.models.len() as u32);
-        let meshes = self.load_meshes_for_model(model);
-        self.models.insert(handle, meshes);
-        handle
     }
 
     pub fn add_material(&mut self, material_pipeline: MaterialPipeline) -> MaterialHandle {

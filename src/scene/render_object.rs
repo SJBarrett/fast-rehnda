@@ -1,11 +1,13 @@
 use std::mem::size_of;
+
 use ash::vk;
 use bevy_ecs::prelude::*;
 use bytemuck_derive::{Pod, Zeroable};
+
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Mat4};
-use crate::scene::{MaterialHandle, Model, ModelHandle};
+use crate::scene::{MaterialHandle, ModelHandle};
 
 #[derive(Component)]
 pub struct RenderObject {
