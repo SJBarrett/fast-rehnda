@@ -2,6 +2,7 @@ use bevy_ecs::prelude::*;
 use bevy_time::Time;
 use bytemuck_derive::{Pod, Zeroable};
 use winit::event::{KeyboardInput, VirtualKeyCode};
+
 use crate::rehnda_core::{Mat4, Vec3};
 
 #[repr(C)]
@@ -64,7 +65,7 @@ impl Camera {
 }
 
 pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, mut keyboard_events: EventReader<KeyboardInput>) {
-    let movement_speed= time.delta_seconds() * 50.0;
+    let movement_speed = time.delta_seconds() * 50.0;
     let rotation_speed = time.delta_seconds() * 200.0;
     let facing_direction = camera.front;
     let up = camera.up;
@@ -75,12 +76,12 @@ pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, mut keyb
             Some(VirtualKeyCode::A) => camera.position -= facing_direction.cross(up).normalize() * movement_speed,
             Some(VirtualKeyCode::D) => camera.position += facing_direction.cross(up) * movement_speed,
             Some(VirtualKeyCode::Q) => {
-               camera.yaw -= rotation_speed;
-            },
+                camera.yaw -= rotation_speed;
+            }
             Some(VirtualKeyCode::E) => {
                 camera.yaw += rotation_speed;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 

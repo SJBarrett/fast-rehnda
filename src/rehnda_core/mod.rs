@@ -4,3 +4,4 @@ mod math;
 pub use math::*;
 mod color;
 pub use color::*;
+pub mod input;

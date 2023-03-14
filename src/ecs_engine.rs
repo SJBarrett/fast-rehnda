@@ -11,6 +11,7 @@ use winit::window::Window;
 
 use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance, PhysicalDevice, Surface, Swapchain, swapchain_systems};
 use crate::etna::material_pipeline::DescriptorManager;
+use crate::rehnda_core::input::{input_systems, InputState};
 use crate::rehnda_core::LongLivedObject;
 use crate::scene::{AssetManager, camera_input_system};
 use crate::scene::demo_scenes;
@@ -37,19 +38,38 @@ impl EtnaWindow {
     }
 }
 
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+enum RehndaSet {
+    PreUpdate,
+    Update,
+    Render,
+}
+
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
         let mut app = App::new();
         app.add_plugin(TimePlugin::default());
         Self::initialise_rendering_resources(&mut app, window, event_loop);
+        app.init_resource::<InputState>();
         app.add_event::<winit::event::KeyboardInput>();
         app.add_startup_system(demo_scenes::gltf_test_scene);
         app.add_systems((
+            input_systems::input_system.in_set(RehndaSet::PreUpdate),
+        ));
+        app.add_systems((
             camera_input_system,
             ui_builder_system.run_if(should_render),
-            draw_system.after(ui_builder_system).run_if(should_render),
-            swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system)
         ));
+        app.add_systems((
+            draw_system.after(ui_builder_system).run_if(should_render),
+            swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system),
+        ));
+        app.configure_set(
+            RehndaSet::PreUpdate.before(RehndaSet::Update)
+        );
+        app.configure_set(
+            RehndaSet::Update.before(RehndaSet::Render)
+        );
         EcsEngine {
             app,
         }
