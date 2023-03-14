@@ -23,6 +23,9 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     let textured_material = asset_manager.add_material(
         material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain)
     );
+    let unlit_material = asset_manager.add_material(
+        material_pipeline::unlit_textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain)
+    );
 
     commands.spawn_batch(vec![
         (RenderObject {
@@ -31,6 +34,12 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
             model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
         }, Actor { name: "Suzanne".into() }),
+        (RenderObject {
+            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (5.0, 5.0, 5.0).into()),
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("assets/models/LightBulb/scene.gltf"), &mut descriptor_manager),
+            material_handle: unlit_material,
+        }, Actor { name: "LightBulb".into() }),
     ])
 }
 

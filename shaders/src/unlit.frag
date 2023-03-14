@@ -11,13 +11,6 @@ layout(location = 2) in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 outColor;
 
-struct Light {
-    vec3 position;
-    vec3 color;
-};
-const Light light = Light(vec3(5.0, 5.0, 5.0), vec3(1.0, 1.0, 1.0));
-
-
 void main() {
-    outColor = texture(texSampler, fragTexCoord) * material_props.base_color * dot((light.position - fragPosition), fragNormal);
+    outColor = texture(texSampler, fragTexCoord) * material_props.base_color;
 }
