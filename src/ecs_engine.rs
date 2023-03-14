@@ -52,7 +52,7 @@ impl EcsEngine {
         Self::initialise_rendering_resources(&mut app, window, event_loop);
         app.init_resource::<InputState>();
         app.add_event::<winit::event::KeyboardInput>();
-        app.add_startup_system(demo_scenes::gltf_test_scene);
+        app.add_startup_system(demo_scenes::shader_development_scene);
         app.add_systems((
             input_systems::input_system.in_set(RehndaSet::PreUpdate),
         ));

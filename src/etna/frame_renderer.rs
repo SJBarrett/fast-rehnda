@@ -168,7 +168,7 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
     let offsets = &[0u64];
     unsafe {
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
-        device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT16);
+        device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT32);
         match &mesh.material {
             Material::Standard(std_material) => {
                 device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set], &[]);

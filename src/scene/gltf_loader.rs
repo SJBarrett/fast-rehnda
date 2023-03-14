@@ -82,10 +82,11 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         })
         .collect();
 
-    let indices: Vec<u16> = (0..primitive_attributes.index_count)
+    let indices: Vec<u32> = (0..primitive_attributes.index_count)
         .map(|i| match &primitive_attributes.indices_accessor {
-            IndexAccessor::U8(accessor) => { accessor.data_at_index(i) as u16 }
-            IndexAccessor::U16(accessor) => { accessor.data_at_index(i) }
+            IndexAccessor::U8(accessor) => { accessor.data_at_index(i) as u32 }
+            IndexAccessor::U16(accessor) => { accessor.data_at_index(i) as u32 }
+            IndexAccessor::U32(accessor) => { accessor.data_at_index(i) }
         })
         .collect();
 
@@ -158,7 +159,8 @@ impl<'a> PrimitiveAttributes<'a> {
         let indices_accessor = match primitive.indices().unwrap().data_type() {
             ComponentType::U8 => { IndexAccessor::U8(BufferAccessor::new(data_buffers, &primitive.indices().unwrap())) }
             ComponentType::U16 => { IndexAccessor::U16(BufferAccessor::new(data_buffers, &primitive.indices().unwrap())) }
-            _ => { panic!("Index type other than u8 and u16 are not supported") }
+            ComponentType::U32 => { IndexAccessor::U32(BufferAccessor::new(data_buffers, &primitive.indices().unwrap())) }
+            _ => { panic!("Index type other than u8, u16 and u32 are not supported") }
         };
         PrimitiveAttributes {
             semantic_accessors,
@@ -177,6 +179,7 @@ impl<'a> PrimitiveAttributes<'a> {
 enum IndexAccessor<'a> {
     U8(BufferAccessor<'a, u8>),
     U16(BufferAccessor<'a, u16>),
+    U32(BufferAccessor<'a, u32>),
 }
 
 enum BufferData<'a> {

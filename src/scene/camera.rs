@@ -65,9 +65,88 @@ impl Camera {
     }
 }
 
-pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, input_state: Res<InputState>) {
-    let movement_speed = time.delta_seconds() * 20.0;
-    let rotation_speed = time.delta_seconds() * 80.0;
+enum CameraMovementType {
+    Orbit,
+    Fps,
+}
+
+pub struct CameraMovementState {
+    movement_type: CameraMovementType,
+    orbit_rotation: f32,
+    orbit_elevation: f32,
+    orbit_target_distance: f32,
+}
+
+impl Default for CameraMovementState {
+    fn default() -> Self {
+        Self {
+            movement_type: CameraMovementType::Orbit,
+            orbit_rotation: 0.0,
+            orbit_elevation: 0.0,
+            orbit_target_distance: 15.0,
+        }
+    }
+}
+
+pub fn camera_input_system(time: Res<Time>, mut camera_movement_state: Local<CameraMovementState>, mut camera: ResMut<Camera>, input_state: Res<InputState>) {
+    if input_state.is_just_down(VirtualKeyCode::T) {
+        match camera_movement_state.movement_type {
+            CameraMovementType::Orbit => {
+                camera_movement_state.movement_type = CameraMovementType::Fps;
+            }
+            CameraMovementType::Fps => {
+                camera_movement_state.movement_type = CameraMovementType::Orbit;
+            }
+        }
+    }
+    match camera_movement_state.movement_type {
+        CameraMovementType::Orbit => {
+            handle_orbit_movement(&time, &mut camera, &mut camera_movement_state, &input_state);
+        }
+        CameraMovementType::Fps => {
+            handle_fps_movement(&time, &mut camera, &input_state);
+        }
+    }
+}
+
+fn handle_orbit_movement(time: &Time, camera: &mut Camera, camera_movement_state: &mut CameraMovementState, input_state: &InputState) {
+    let rotate_speed = time.delta_seconds() * 100.0;
+    let zoom_speed = time.delta_seconds() * 10.0;
+    if input_state.is_down(VirtualKeyCode::W) {
+        camera_movement_state.orbit_elevation -= rotate_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::S) {
+        camera_movement_state.orbit_elevation += rotate_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::A) {
+        camera_movement_state.orbit_rotation += rotate_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::D) {
+        camera_movement_state.orbit_rotation -= rotate_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::Q) {
+        camera_movement_state.orbit_target_distance += zoom_speed;
+    }
+    if input_state.is_down(VirtualKeyCode::E) {
+        camera_movement_state.orbit_target_distance -= zoom_speed;
+    }
+    camera_movement_state.orbit_target_distance = camera_movement_state.orbit_target_distance.clamp(0.5, 100.0);
+
+    let target_distance = camera_movement_state.orbit_target_distance;
+    let x = target_distance * camera_movement_state.orbit_rotation.to_radians().sin() * camera_movement_state.orbit_elevation.to_radians().cos();
+    let y = target_distance * camera_movement_state.orbit_elevation.to_radians().sin();
+    let z = target_distance * camera_movement_state.orbit_rotation.to_radians().cos() * camera_movement_state.orbit_elevation.to_radians().cos();
+    camera.position = (x, y, z).into();
+    camera.front = (-camera.position).normalize();
+}
+
+fn handle_fps_movement(time: &Time, camera: &mut Camera, input_state: &InputState) {
+    let mut speed_modifier = time.delta_seconds();
+    if input_state.is_down(VirtualKeyCode::LShift) {
+        speed_modifier *= 0.1;
+    }
+    let movement_speed = speed_modifier * 20.0;
+    let rotation_speed = speed_modifier * 80.0;
     let facing_direction = camera.front;
     let up = camera.up;
     if input_state.is_down(VirtualKeyCode::W) {
@@ -85,7 +164,7 @@ pub fn camera_input_system(time: Res<Time>, mut camera: ResMut<Camera>, input_st
     if input_state.is_down(VirtualKeyCode::Space) {
         camera.position += up * movement_speed;
     }
-    if input_state.is_down(VirtualKeyCode::LShift) {
+    if input_state.is_down(VirtualKeyCode::LControl) {
         camera.position -= up * movement_speed;
     }
     if input_state.is_down(VirtualKeyCode::Q) {

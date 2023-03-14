@@ -14,6 +14,26 @@ pub struct Actor {
     pub name: String,
 }
 
+pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
+    let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
+    camera.position = (1.5, -0.6, 9.7).into();
+    camera.yaw = -97.0;
+    commands.insert_resource(camera);
+
+    let textured_material = asset_manager.add_material(
+        material_pipeline::textured_pipeline(device.ptr(), &mut descriptor_manager, &physical_device.graphics_settings, &swapchain)
+    );
+
+    commands.spawn_batch(vec![
+        (RenderObject {
+            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager),
+            material_handle: textured_material,
+        }, Actor { name: "Suzanne".into() }),
+    ])
+}
+
 pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, device: DeviceRes, physical_device: PhysicalDeviceRes, mut descriptor_manager: ResMut<DescriptorManager>) {
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
     commands.insert_resource(camera);
