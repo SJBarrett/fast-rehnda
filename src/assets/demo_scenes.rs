@@ -6,8 +6,8 @@ use glam::{EulerRot, Quat};
 use crate::etna::{DeviceRes, material_pipeline, PhysicalDeviceRes, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{Mat4, Vec3};
-use crate::scene::{AssetManager, Camera};
-use crate::scene::render_object::RenderObject;
+use crate::assets::{AssetManager, Camera};
+use crate::assets::render_object::RenderObject;
 
 #[derive(Component)]
 pub struct Actor {

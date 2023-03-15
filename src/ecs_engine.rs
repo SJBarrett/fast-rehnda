@@ -13,8 +13,8 @@ use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::input::{input_systems, InputState};
 use crate::rehnda_core::LongLivedObject;
-use crate::scene::{AssetManager, camera_input_system};
-use crate::scene::demo_scenes;
+use crate::assets::{AssetManager, camera_input_system};
+use crate::assets::demo_scenes;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {

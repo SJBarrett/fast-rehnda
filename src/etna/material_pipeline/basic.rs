@@ -8,7 +8,7 @@ use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::etna::{Device, GraphicsSettings, Swapchain};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
-use crate::scene::{Vertex};
+use crate::assets::{Vertex};
 
 pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain) -> MaterialPipeline {
     let base_color_texture_sampler_layout = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[

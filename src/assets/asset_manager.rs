@@ -7,8 +7,8 @@ use bevy_ecs::system::Resource;
 use crate::etna::{CommandPool, Device, PhysicalDevice};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::scene::gltf_loader;
-use crate::scene::render_object::{Mesh, MultiMeshModel};
+use crate::assets::gltf_loader;
+use crate::assets::render_object::{Mesh, MultiMeshModel};
 
 #[derive(Resource)]
 pub struct AssetManager {

@@ -207,7 +207,7 @@ pub mod swapchain_systems {
 
     use crate::ecs_engine::EtnaWindow;
     use crate::etna::{CommandPool, PhysicalDeviceRes, Surface, Swapchain};
-    use crate::scene::Camera;
+    use crate::assets::Camera;
 
     pub fn swap_chain_recreation_system(mut swapchain: ResMut<Swapchain>, physical_device: PhysicalDeviceRes, surface: Res<Surface>, command_pool: Res<CommandPool>, window: Res<EtnaWindow>, mut camera: ResMut<Camera>) {
         swapchain.recreate(&physical_device, &surface, &command_pool, &physical_device.queue_families(), surface.query_best_swapchain_creation_details(window.winit_window.inner_size(), physical_device.handle()));

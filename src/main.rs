@@ -7,7 +7,7 @@ use crate::application::Application;
 
 mod rehnda_core;
 mod etna;
-mod scene;
+mod assets;
 mod ui;
 mod application;
 mod ecs_engine;

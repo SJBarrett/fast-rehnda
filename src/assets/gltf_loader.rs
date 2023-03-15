@@ -18,8 +18,8 @@ use image::{DynamicImage, EncodableLayout};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3};
-use crate::scene::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
-use crate::scene::Vertex;
+use crate::assets::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
+use crate::assets::Vertex;
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();

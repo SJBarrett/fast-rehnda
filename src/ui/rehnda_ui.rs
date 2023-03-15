@@ -4,9 +4,9 @@ use egui::{DragValue, Separator, Ui};
 use glam::{EulerRot, Mat4, Quat};
 
 use crate::ecs_engine::EtnaWindow;
-use crate::scene::Camera;
-use crate::scene::demo_scenes::Actor;
-use crate::scene::render_object::RenderObject;
+use crate::assets::Camera;
+use crate::assets::demo_scenes::Actor;
+use crate::assets::render_object::RenderObject;
 use crate::ui::ui_painter::{EguiOutput, ScreenState};
 
 pub fn ui_builder_system(mut camera: ResMut<Camera>, mut render_objects: Query<(&mut RenderObject, &Actor)>, egui_ctx: NonSend<egui::Context>, mut winit_state: NonSendMut<egui_winit::State>, mut ui_output: ResMut<EguiOutput>, window: Res<EtnaWindow>) {
