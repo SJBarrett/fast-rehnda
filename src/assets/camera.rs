@@ -113,16 +113,16 @@ fn handle_orbit_movement(time: &Time, camera: &mut Camera, camera_movement_state
     let rotate_speed = time.delta_seconds() * 100.0;
     let zoom_speed = time.delta_seconds() * 10.0;
     if input_state.is_down(VirtualKeyCode::W) {
-        camera_movement_state.orbit_elevation -= rotate_speed;
-    }
-    if input_state.is_down(VirtualKeyCode::S) {
         camera_movement_state.orbit_elevation += rotate_speed;
     }
+    if input_state.is_down(VirtualKeyCode::S) {
+        camera_movement_state.orbit_elevation -= rotate_speed;
+    }
     if input_state.is_down(VirtualKeyCode::A) {
-        camera_movement_state.orbit_rotation += rotate_speed;
+        camera_movement_state.orbit_rotation -= rotate_speed;
     }
     if input_state.is_down(VirtualKeyCode::D) {
-        camera_movement_state.orbit_rotation -= rotate_speed;
+        camera_movement_state.orbit_rotation += rotate_speed;
     }
     if input_state.is_down(VirtualKeyCode::Q) {
         camera_movement_state.orbit_target_distance += zoom_speed;

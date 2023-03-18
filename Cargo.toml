@@ -37,7 +37,8 @@ lazy_static = "1.4.0"
 ahash = "0.8.3"
 urlencoding = "2.1.2"
 
-[build-dependencies]
+# shader compilation
+#[build-dependencies]
 shaderc = "0.8.2"
 glob = "0.3.1"
 

@@ -7,7 +7,8 @@ use bytemuck_derive::{Pod, Zeroable};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Mat4};
-use crate::assets::{MaterialHandle, ModelHandle};
+use crate::assets::{ModelHandle};
+use crate::assets::material_server::MaterialHandle;
 
 #[derive(Component)]
 pub struct RenderObject {

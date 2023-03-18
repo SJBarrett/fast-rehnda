@@ -13,8 +13,9 @@ use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::input::{input_systems, InputState};
 use crate::rehnda_core::LongLivedObject;
-use crate::assets::{AssetManager, camera_input_system};
+use crate::assets::{AssetManager, camera_input_system, material_server};
 use crate::assets::demo_scenes;
+use crate::assets::material_server::MaterialServer;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {
@@ -51,11 +52,13 @@ impl EcsEngine {
         app.add_plugin(TimePlugin::default());
         Self::initialise_rendering_resources(&mut app, window, event_loop);
         app.init_resource::<InputState>();
+        app.init_resource::<MaterialServer>();
         app.add_event::<winit::event::KeyboardInput>();
         app.add_startup_system(demo_scenes::shader_development_scene);
         app.add_systems((
             input_systems::input_system.in_set(RehndaSet::PreUpdate),
         ));
+        app.add_system(material_server::material_server_system);
         app.add_systems((
             camera_input_system,
             ui_builder_system.run_if(should_render),
@@ -148,6 +151,7 @@ impl Drop for EcsEngine {
         unsafe { self.app.world.resource::<LongLivedObject<Device>>().device_wait_idle().expect("Failed to wait for the device to be idle") };
         self.app.world.remove_resource::<EguiOutput>();
         self.app.world.remove_resource::<UiPainter>();
+        self.app.world.remove_resource::<MaterialServer>();
         self.app.world.remove_resource::<AssetManager>();
         self.app.world.remove_resource::<CommandPool>();
         self.app.world.remove_resource::<FrameRenderContext>();

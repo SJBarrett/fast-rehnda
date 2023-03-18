@@ -5,7 +5,7 @@ use ahash::AHashMap;
 use bevy_ecs::system::Resource;
 
 use crate::etna::{CommandPool, Device, PhysicalDevice};
-use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
+use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::render_object::{Mesh, MultiMeshModel};
@@ -17,7 +17,6 @@ pub struct AssetManager {
     resource_command_pool: CommandPool,
     models: AHashMap<ModelHandle, Vec<MeshHandle>>,
     meshes: AHashMap<MeshHandle, Mesh>,
-    materials: AHashMap<MaterialHandle, MaterialPipeline>,
 }
 
 impl AssetManager {
@@ -28,7 +27,6 @@ impl AssetManager {
             resource_command_pool,
             models: AHashMap::new(),
             meshes: AHashMap::new(),
-            materials: AHashMap::new(),
         }
     }
 
@@ -48,12 +46,6 @@ impl AssetManager {
         }).collect()
     }
 
-    pub fn add_material(&mut self, material_pipeline: MaterialPipeline) -> MaterialHandle {
-        let handle = MaterialHandle::new(self.materials.len() as u32);
-        self.materials.insert(handle, material_pipeline);
-        handle
-    }
-
     pub fn meshes_ref(&self, model_handle: &ModelHandle) -> &[MeshHandle] {
         unsafe { self.models.get(model_handle).unwrap_unchecked().as_slice() }
     }
@@ -61,32 +53,27 @@ impl AssetManager {
     pub fn mesh_ref(&self, mesh_handle: &MeshHandle) -> &Mesh {
         unsafe { self.meshes.get(mesh_handle).unwrap_unchecked() }
     }
-
-    pub fn material_ref(&self, material_handle: &MaterialHandle) -> &MaterialPipeline {
-        unsafe { self.materials.get(material_handle).unwrap_unchecked() }
-    }
 }
 
-pub type MeshHandle = ResourceHandle<Mesh>;
-pub type ModelHandle = ResourceHandle<MultiMeshModel>;
-pub type MaterialHandle = ResourceHandle<MaterialPipeline>;
+pub type MeshHandle = AssetHandle<Mesh>;
+pub type ModelHandle = AssetHandle<MultiMeshModel>;
 
 #[derive(Debug)]
-pub struct ResourceHandle<T> {
+pub struct AssetHandle<T> {
     handle: u32,
     marker: std::marker::PhantomData<T>,
 }
 
-impl<T> ResourceHandle<T> {
-    pub fn new(handle: u32) -> ResourceHandle<T> {
-        ResourceHandle {
+impl<T> AssetHandle<T> {
+    pub fn new(handle: u32) -> AssetHandle<T> {
+        AssetHandle {
             handle,
             marker: std::marker::PhantomData,
         }
     }
 
-    pub fn null() -> ResourceHandle<T> {
-        ResourceHandle {
+    pub fn null() -> AssetHandle<T> {
+        AssetHandle {
             handle: u32::MAX,
             marker: std::marker::PhantomData,
         }
@@ -97,26 +84,26 @@ impl<T> ResourceHandle<T> {
     }
 }
 
-impl<T> Copy for ResourceHandle<T> {}
+impl<T> Copy for AssetHandle<T> {}
 
-impl<T> Clone for ResourceHandle<T> {
+impl<T> Clone for AssetHandle<T> {
     fn clone(&self) -> Self {
-        ResourceHandle {
+        AssetHandle {
             handle: self.handle,
             marker: std::marker::PhantomData,
         }
     }
 }
 
-impl<T> Eq for ResourceHandle<T> {}
+impl<T> Eq for AssetHandle<T> {}
 
-impl<T> PartialEq for ResourceHandle<T> {
+impl<T> PartialEq for AssetHandle<T> {
     fn eq(&self, other: &Self) -> bool {
         self.handle == other.handle
     }
 }
 
-impl<T> Hash for ResourceHandle<T> {
+impl<T> Hash for AssetHandle<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u32(self.handle)
     }

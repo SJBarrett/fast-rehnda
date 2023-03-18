@@ -7,7 +7,8 @@ use bevy_ecs::prelude::*;
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
-use crate::assets::{AssetManager, Camera, MaterialHandle, MeshHandle, ViewProjectionMatrices};
+use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
+use crate::assets::material_server::{MaterialHandle, MaterialServer};
 use crate::assets::render_object::{Material, Mesh, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
 
@@ -42,6 +43,7 @@ pub fn draw_system(
     command_pool: Res<CommandPool>,
     mut swapchain: ResMut<Swapchain>,
     asset_manager: Res<AssetManager>,
+    material_server: Res<MaterialServer>,
     camera: Res<Camera>,
     query: Query<&RenderObject>,
     mut ui_painter: ResMut<UiPainter>,
@@ -69,12 +71,16 @@ pub fn draw_system(
     let mut last_mesh_handle = MeshHandle::null();
     let mut last_mesh: Option<&Mesh> = None;
     for object in query.iter() {
-        // new material so we should bind the new pipeline
-        if last_material_handle.is_null() || last_material_handle != object.material_handle {
-            let material = asset_manager.material_ref(&object.material_handle);
-            last_material = Some(material);
-            bind_material(&frame_renderer.device, &swapchain, material, frame_data);
+        let is_different_material = last_material_handle.is_null() || last_material_handle != object.material_handle;
+        if let Some(loaded_material) = material_server.material_ref(&object.material_handle) {
+            if is_different_material {
+                last_material = Some(loaded_material);
+                bind_material(&frame_renderer.device, &swapchain, loaded_material, frame_data);
+            }
+        } else {
+            continue;
         }
+
         let current_material = unsafe { last_material.unwrap_unchecked() };
 
         for &mesh_handle in asset_manager.meshes_ref(&object.model_handle) {

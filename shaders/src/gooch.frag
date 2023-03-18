@@ -22,7 +22,6 @@ void main() {
     vec4 surface_color = texture(texSampler, fragTexCoord) * material_props.base_color;
     vec4 cool_color = vec4(0.0, 0.0, 0.55, 1.0) * 0.1 + 0.9 * surface_color;
     vec4 warm_color = vec4(0.3, 0.3, 0.0, 1.0) * 0.1 + 0.9 * surface_color;
-    vec4 highlight = vec4(1.0, 1.0, 1.0, 1.0);
     vec3 light_dir = normalize(light.position - fragPosition);
     vec3 normal = normalize(fragNormal);
     float t = (dot(light_dir, normal) + 1) / 2;
