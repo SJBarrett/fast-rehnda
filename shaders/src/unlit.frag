@@ -1,5 +1,11 @@
 #version 460
 
+layout(set = 0, binding = 0) uniform TransformationMatrices {
+    mat4 view;
+    mat4 projection;
+    vec4 camera_position;
+} transforms;
+
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
 layout(set = 1, binding = 1) uniform MaterialProps {
     vec4 base_color;

@@ -3,6 +3,7 @@
 layout(set = 0, binding = 0) uniform TransformationMatrices {
     mat4 view;
     mat4 projection;
+    vec4 camera_position;
 } transforms;
 
 layout(push_constant) uniform PushConstants {

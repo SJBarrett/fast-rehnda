@@ -7,7 +7,7 @@ use crate::etna::{DeviceRes, material_pipeline, PhysicalDeviceRes, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{Mat4, Vec3};
 use crate::assets::{AssetManager, Camera};
-use crate::assets::material_server::MaterialServer;
+use crate::assets::material_server::{MaterialServer, Shader};
 use crate::assets::render_object::RenderObject;
 
 #[derive(Component)]
@@ -21,8 +21,8 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     camera.yaw = -97.0;
     commands.insert_resource(camera);
 
-    let textured_material = material_server.load_material(material_pipeline::textured_pipeline);
-    let unlit_material = material_server.load_material(material_pipeline::unlit_textured_pipeline);
+    let textured_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Gooch);
+    let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
 
     commands.spawn_batch(vec![
         (RenderObject {
@@ -47,7 +47,7 @@ pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut as
     let path = Path::new("../glTF-Sample-Models/2.0/Duck/glTF/Duck.gltf");
     let gltf_model = asset_manager.load_gltf(path, &mut descriptor_manager);
 
-    let textured_material = material_server.load_material(material_pipeline::textured_pipeline);
+    let textured_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Default);
 
     commands.spawn_batch(vec![
         (RenderObject {

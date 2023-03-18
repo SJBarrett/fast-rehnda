@@ -1,6 +1,7 @@
 use bevy_ecs::prelude::*;
 use bevy_time::Time;
 use bytemuck_derive::{Pod, Zeroable};
+use glam::Vec4;
 use winit::event::{KeyboardInput, VirtualKeyCode};
 
 use crate::rehnda_core::{Mat4, Vec3};
@@ -11,6 +12,7 @@ use crate::rehnda_core::input::{InputState, KeyState};
 pub struct ViewProjectionMatrices {
     pub view: Mat4,
     pub projection: Mat4,
+    pub camera_position: Vec4,
 }
 
 #[derive(Resource)]
@@ -61,6 +63,7 @@ impl Camera {
         ViewProjectionMatrices {
             view: Mat4::look_at_rh(self.position, self.position + self.front, self.up),
             projection: self.projection,
+            camera_position: (self.position, 1.0).into(),
         }
     }
 }

@@ -291,7 +291,7 @@ impl FrameRenderContext {
                 .offset(0)
                 .range(size_of::<ViewProjectionMatrices>() as u64);
             let (descriptor_set, _) = descriptor_manager.descriptor_builder()
-                .bind_buffer(0, descriptor_buffer_info, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX)
+                .bind_buffer(0, descriptor_buffer_info, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
                 .build()
                 .expect("Failed to build camera descriptor");
             FrameData {
