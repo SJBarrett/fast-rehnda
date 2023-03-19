@@ -14,6 +14,7 @@ use crate::assets::render_object::RenderObject;
 #[derive(Component)]
 pub struct Actor {
     pub name: String,
+    pub transform: Mat4,
 }
 
 pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {
@@ -27,21 +28,25 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
 
     commands.spawn((
         RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
             relative_transform: Default::default(),
             model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
         },
-        Actor { name: "Suzanne".into() }
+        Actor {
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
+            name: "Suzanne".into(),
+        }
     ));
     commands.spawn((
         RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (5.0, 5.0, 5.0).into()),
             relative_transform: Default::default(),
             model_handle: asset_manager.load_gltf(Path::new("assets/models/LightBulb/scene.gltf"), &mut descriptor_manager),
             material_handle: unlit_material,
         },
-        Actor { name: "LightBulb".into() },
+        Actor {
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (5.0, 5.0, 5.0).into()),
+            name: "LightBulb".into(),
+        },
         PointLight::default(),
     ));
 }
@@ -55,24 +60,24 @@ pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut as
 
     let textured_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Default);
 
-    commands.spawn_batch(vec![
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (30.0, 0.0, 0.0).into()),
-            relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/OrientationTest/glTF/OrientationTest.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
-        }, Actor { name: "BoomBox".into() }),
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (0.0, 0.0, 3.0).into()),
-            relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/Box With Spaces/glTF/Box With Spaces.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
-        }, Actor { name: "BoxTextured".into() }),
-        (RenderObject {
-            global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (3.0, 0.0, 0.0).into()),
-            relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
-        }, Actor { name: "AntiqueCamera".into() }),
-    ])
+    // commands.spawn_batch(vec![
+    //     (RenderObject {
+    //         global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (30.0, 0.0, 0.0).into()),
+    //         relative_transform: Default::default(),
+    //         model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/OrientationTest/glTF/OrientationTest.gltf"), &mut descriptor_manager),
+    //         material_handle: textured_material,
+    //     }, Actor { name: "BoomBox".into() }),
+    //     (RenderObject {
+    //         global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (0.0, 0.0, 3.0).into()),
+    //         relative_transform: Default::default(),
+    //         model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/Box With Spaces/glTF/Box With Spaces.gltf"), &mut descriptor_manager),
+    //         material_handle: textured_material,
+    //     }, Actor { name: "BoxTextured".into() }),
+    //     (RenderObject {
+    //         global_transform: Mat4::from_scale_rotation_translation((1.0, 1.0, 1.0).into(), Quat::IDENTITY, (3.0, 0.0, 0.0).into()),
+    //         relative_transform: Default::default(),
+    //         model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
+    //         material_handle: textured_material,
+    //     }, Actor { name: "AntiqueCamera".into() }),
+    // ])
 }

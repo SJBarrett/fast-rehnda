@@ -3,6 +3,7 @@ use ash::vk;
 use bevy_ecs::prelude::*;
 use crevice::std140::AsStd140;
 use glam::Vec4Swizzles;
+use crate::assets::demo_scenes::Actor;
 use crate::assets::render_object::RenderObject;
 use crate::etna::{Buffer, Device, HostMappedBuffer, HostMappedBufferCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
@@ -58,10 +59,10 @@ impl LightingDataManager {
     }
 }
 
-pub fn update_lights_system(mut lighting_data_manager: ResMut<LightingDataManager>, lights: Query<(&RenderObject, &PointLight)>) {
+pub fn update_lights_system(mut lighting_data_manager: ResMut<LightingDataManager>, lights: Query<(&Actor, &PointLight)>) {
     if let Some((object, light)) = lights.iter().nth(0) {
         let light_uniform = PointLightUniform {
-            position: object.global_transform.w_axis.xyz(),
+            position: object.transform.w_axis.xyz(),
             light_color: light.light_color,
             emissivity: light.emissivity,
         }.as_std140();

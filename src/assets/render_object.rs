@@ -12,26 +12,19 @@ use crate::assets::material_server::MaterialHandle;
 
 #[derive(Component)]
 pub struct RenderObject {
-    pub global_transform: Mat4,
     pub relative_transform: Mat4,
     pub model_handle: ModelHandle,
     pub material_handle: MaterialHandle,
 }
 
 impl RenderObject {
-    pub fn new_with_transform(transform: Mat4, model_handle: ModelHandle, material_handle: MaterialHandle) -> RenderObject {
+    pub fn new_with_transform(model_handle: ModelHandle, material_handle: MaterialHandle) -> RenderObject {
         RenderObject {
-            global_transform: transform,
             relative_transform: Mat4::IDENTITY,
             model_handle,
             material_handle,
         }
     }
-}
-
-#[derive(Component)]
-pub struct Actor {
-    pub global_transform: Mat4,
 }
 
 pub struct MultiMeshModel {

@@ -6,8 +6,9 @@ use bevy_ecs::prelude::*;
 
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
-use crate::rehnda_core::ConstPtr;
+use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
+use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialHandle, MaterialServer};
 use crate::assets::render_object::{Material, Mesh, RenderObject};
@@ -46,7 +47,7 @@ pub fn draw_system(
     asset_manager: Res<AssetManager>,
     material_server: Res<MaterialServer>,
     camera: Res<Camera>,
-    query: Query<&RenderObject>,
+    query: Query<(&Actor, &RenderObject)>,
     mut ui_painter: ResMut<UiPainter>,
     ui_output: Res<EguiOutput>,
     lights: Res<LightingDataManager>,
@@ -72,7 +73,7 @@ pub fn draw_system(
     let mut last_material: Option<&MaterialPipeline> = None;
     let mut last_mesh_handle = MeshHandle::null();
     let mut last_mesh: Option<&Mesh> = None;
-    for object in query.iter() {
+    for (actor, object) in query.iter() {
         let is_different_material = last_material_handle.is_null() || last_material_handle != object.material_handle;
         if let Some(loaded_material) = material_server.material_ref(&object.material_handle) {
             if is_different_material {
@@ -94,7 +95,7 @@ pub fn draw_system(
             }
 
             let current_model = unsafe { last_mesh.unwrap_unchecked() };
-            draw_object(&frame_renderer.device, frame_data, current_material, current_model, object);
+            draw_object(&frame_renderer.device, frame_data, current_material, current_model, actor.transform);
             last_material_handle = object.material_handle;
             last_mesh_handle = mesh_handle;
         }
@@ -188,8 +189,8 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
     }
 }
 
-fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, render_object: &RenderObject) {
-    let transform = render_object.global_transform * mesh.relative_transform;
+fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, world_transform: Mat4) {
+    let transform = world_transform * mesh.relative_transform;
     let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&transform));
     unsafe {
         device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
