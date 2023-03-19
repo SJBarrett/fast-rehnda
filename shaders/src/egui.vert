@@ -8,7 +8,7 @@ layout(push_constant) uniform PushConstants {
     vec2 screen_size;
 } constants;
 
-layout(location = 0) out vec2 fragTexCoord;
+layout(location = 0) out vec2 frag_tex_coord;
 layout(location = 1) out vec4 fragColor;
 
 vec4 position_from_screen(vec2 screen_position) {
@@ -22,7 +22,7 @@ vec4 position_from_screen(vec2 screen_position) {
 
 void main() {
     gl_Position = position_from_screen(inPosition);
-    fragTexCoord = inTexCoord;
+    frag_tex_coord = inTexCoord;
     fragColor = inColor;
 }
 

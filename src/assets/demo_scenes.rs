@@ -7,6 +7,7 @@ use crate::etna::{DeviceRes, material_pipeline, PhysicalDeviceRes, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{Mat4, Vec3};
 use crate::assets::{AssetManager, Camera};
+use crate::assets::light_source::PointLight;
 use crate::assets::material_server::{MaterialServer, Shader};
 use crate::assets::render_object::RenderObject;
 
@@ -24,20 +25,25 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     let textured_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Gooch);
     let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
 
-    commands.spawn_batch(vec![
-        (RenderObject {
+    commands.spawn((
+        RenderObject {
             global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
             relative_transform: Default::default(),
             model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
-        }, Actor { name: "Suzanne".into() }),
-        (RenderObject {
+        },
+        Actor { name: "Suzanne".into() }
+    ));
+    commands.spawn((
+        RenderObject {
             global_transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (5.0, 5.0, 5.0).into()),
             relative_transform: Default::default(),
             model_handle: asset_manager.load_gltf(Path::new("assets/models/LightBulb/scene.gltf"), &mut descriptor_manager),
             material_handle: unlit_material,
-        }, Actor { name: "LightBulb".into() }),
-    ])
+        },
+        Actor { name: "LightBulb".into() },
+        PointLight::default(),
+    ));
 }
 
 pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {
@@ -67,6 +73,6 @@ pub fn gltf_test_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut as
             relative_transform: Default::default(),
             model_handle: asset_manager.load_gltf(Path::new("assets/models/AntiqueCamera/glTF/AntiqueCamera.gltf"), &mut descriptor_manager),
             material_handle: textured_material,
-        },  Actor { name: "AntiqueCamera".into() }),
+        }, Actor { name: "AntiqueCamera".into() }),
     ])
 }

@@ -13,8 +13,9 @@ use crate::etna::{CommandPool, Device, draw_system, FrameRenderContext, Instance
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::input::{input_systems, InputState};
 use crate::rehnda_core::LongLivedObject;
-use crate::assets::{AssetManager, camera_input_system, material_server};
+use crate::assets::{AssetManager, camera_input_system, light_source, material_server};
 use crate::assets::demo_scenes;
+use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::MaterialServer;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
@@ -59,14 +60,15 @@ impl EcsEngine {
         app.add_systems((
             input_systems::input_system.in_set(RehndaSet::PreUpdate),
         ));
-        app.add_system(material_server::material_server_system);
+        app.add_system(material_server::material_server_system.in_set(RehndaSet::Render));
         app.add_systems((
-            camera_input_system,
-            ui_builder_system.run_if(should_render),
+            camera_input_system.in_set(RehndaSet::Update),
+            light_source::update_lights_system.in_set(RehndaSet::Update),
+            ui_builder_system.run_if(should_render).in_set(RehndaSet::Render),
         ));
         app.add_systems((
-            draw_system.after(ui_builder_system).run_if(should_render),
-            swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system),
+            draw_system.after(ui_builder_system).run_if(should_render).in_set(RehndaSet::Render),
+            swapchain_systems::swap_chain_recreation_system.run_if(swapchain_systems::swap_chain_needs_recreation).after(draw_system).in_set(RehndaSet::Render),
         ));
         app.configure_set(
             RehndaSet::PreUpdate.before(RehndaSet::Update)
@@ -109,7 +111,7 @@ impl EcsEngine {
         app.insert_non_send_resource(egui_winit::State::new(event_loop));
         app.insert_resource(EguiOutput::default());
         app.insert_resource(UiPainter::create(device.ptr(), &physical_device.graphics_settings, &swapchain));
-
+        app.insert_resource(LightingDataManager::new(device.ptr(), &mut descriptor_manager));
         let etna_context = EtnaContext {
             entry,
         };
@@ -152,6 +154,7 @@ impl Drop for EcsEngine {
         unsafe { self.app.world.resource::<LongLivedObject<Device>>().device_wait_idle().expect("Failed to wait for the device to be idle") };
         self.app.world.remove_resource::<EguiOutput>();
         self.app.world.remove_resource::<UiPainter>();
+        self.app.world.remove_resource::<LightingDataManager>();
         self.app.world.remove_resource::<MaterialServer>();
         self.app.world.remove_resource::<AssetManager>();
         self.app.world.remove_resource::<CommandPool>();

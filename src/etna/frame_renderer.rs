@@ -8,6 +8,7 @@ use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateI
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
+use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialHandle, MaterialServer};
 use crate::assets::render_object::{Material, Mesh, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
@@ -48,6 +49,7 @@ pub fn draw_system(
     query: Query<&RenderObject>,
     mut ui_painter: ResMut<UiPainter>,
     ui_output: Res<EguiOutput>,
+    lights: Res<LightingDataManager>,
 ) {
     let frame_data = unsafe { frame_renderer.frame_data.get_unchecked(frame_renderer.current_frame % MAX_FRAMES_IN_FLIGHT) };
 
@@ -88,7 +90,7 @@ pub fn draw_system(
             if last_mesh_handle.is_null() || last_mesh_handle != mesh_handle {
                 let mesh = asset_manager.mesh_ref(&mesh_handle);
                 last_mesh = Some(mesh);
-                bind_model(&frame_renderer.device, frame_data, current_material, mesh);
+                bind_model(&frame_renderer.device, frame_data, current_material, mesh, &lights);
             }
 
             let current_model = unsafe { last_mesh.unwrap_unchecked() };
@@ -169,7 +171,7 @@ fn bind_material(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipe
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
 }
 
-fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh) {
+fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, light_data: &LightingDataManager) {
     let buffers = &[mesh.vertex_buffer.buffer];
     let offsets = &[0u64];
     unsafe {
@@ -177,7 +179,7 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
         device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT32);
         match &mesh.material {
             Material::Standard(std_material) => {
-                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set], &[]);
+                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set, light_data.descriptor_set], &[]);
             }
             _ => {
                 device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);

@@ -9,3 +9,4 @@ pub mod gltf_loader;
 pub mod render_object;
 pub mod material_server;
 pub mod shader_compiler;
+pub mod light_source;
