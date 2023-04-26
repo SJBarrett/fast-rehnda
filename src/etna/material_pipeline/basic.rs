@@ -13,7 +13,9 @@ use crate::assets::{Vertex};
 pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, swapchain: &Swapchain, vert_shader_path: &Path, frag_shader_path: &Path) -> MaterialPipeline {
     let base_color_texture_sampler_layout = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[
         layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
-        layout_binding(1, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(1, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(2, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(3, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT),
     ]);
     let lighting_set = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[
         layout_binding(0, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT),

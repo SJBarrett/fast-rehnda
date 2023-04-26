@@ -12,14 +12,20 @@ use glam::{Mat4, Quat};
 use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
 use gltf::buffer;
 use gltf::json::accessor::ComponentType;
+use gltf::material::NormalTexture;
 use gltf::scene::Transform;
-use image::{DynamicImage, EncodableLayout};
+use image::{DynamicImage, EncodableLayout, RgbaImage};
+use lazy_static::lazy_static;
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3};
 use crate::assets::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
 use crate::assets::Vertex;
+
+lazy_static! {
+    static ref MISSING_TEXTURE_IMG: RgbaImage = missing_texture();
+}
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
     let working_dir = gltf_path.parent().unwrap();
@@ -60,6 +66,27 @@ fn gltf_transform_to_mat4(transform: Transform) -> Mat4 {
     }
 }
 
+fn missing_texture() -> image::RgbaImage {
+    let img_path = Path::new("assets/debug/missing_texture_image.jpg");
+    image::open(img_path).expect("Failed to open gltf image").to_rgba8()
+}
+
+fn default_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager) -> Texture {
+    Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+        width: MISSING_TEXTURE_IMG.width(),
+        height: MISSING_TEXTURE_IMG.height(),
+        mip_levels: Some((MISSING_TEXTURE_IMG.width().max(MISSING_TEXTURE_IMG.height())).ilog2() + 1),
+        data: MISSING_TEXTURE_IMG.as_bytes(),
+        sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
+            min_filter: None,
+            mag_filter: None,
+            mip_map_mode: None,
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+        }),
+    })
+}
+
 fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, primitive: Primitive, gltf_mesh: &gltf::mesh::Mesh) -> Mesh {
     let material = primitive.material();
     let base_color_texture = material.pbr_metallic_roughness().base_color_texture();
@@ -92,32 +119,23 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 
 
     let base_color_texture = base_color_texture.as_ref().map(|texture| {
-        let image = data_buffers.images[texture.texture().index()].to_rgba8();
-        let sampler_options = TexSamplerOptions::from_gltf(&texture.texture().sampler());
-
-        Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
-            width: image.width(),
-            height: image.height(),
-            mip_levels: Some((image.width().max(image.height())).ilog2() + 1),
-            data: image.as_bytes(),
-            sampler_info: SamplerOptions::FilterOptions(&sampler_options),
-        })
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
     }).unwrap_or_else(|| {
-        let white_data = &ColorRgbaF::WHITE.to_rgba8();
-        let white_img: &[u8] = bytemuck::cast_slice(white_data);
-        Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
-            width: 1,
-            height: 1,
-            mip_levels: None,
-            data: white_img,
-            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
-                min_filter: None,
-                mag_filter: None,
-                mip_map_mode: None,
-                address_mode_u: Default::default(),
-                address_mode_v: Default::default(),
-            }),
-        })
+       default_texture(device, physical_device, command_pool, descriptor_manager)
+    });
+
+    let normal_texture = material.normal_texture().map(|texture| {
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
+    }).unwrap_or_else(|| {
+        default_texture(device, physical_device, command_pool, descriptor_manager)
+    });
+
+    // TODO this assumes that occlusion always uses the R channel, metal B and roughness G. Metal and
+    // roughness are always together, but not necessarily occlusion
+    let occlusion_roughness_metallic_texture = material.pbr_metallic_roughness().metallic_roughness_texture().map(|texture| {
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
+    }).unwrap_or_else(|| {
+        default_texture(device, physical_device, command_pool, descriptor_manager)
     });
 
     let buffer_data: &[u8] = bytemuck::cast_slice(vertices.as_slice());
@@ -132,7 +150,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
     });
     let base_color = ColorRgbaF::new_from_array(material.pbr_metallic_roughness().base_color_factor());
-    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, base_color);
+    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, normal_texture, occlusion_roughness_metallic_texture, base_color);
 
     Mesh {
         name: String::from(gltf_mesh.name().unwrap_or("defaultName")),
@@ -142,6 +160,19 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         index_count: indices.len() as u32,
         relative_transform: Mat4::IDENTITY,
     }
+}
+
+fn load_gltf_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, texture: &gltf::Texture) -> Texture {
+    let image = data_buffers.images[texture.index()].to_rgba8();
+    let sampler_options = TexSamplerOptions::from_gltf(&texture.sampler());
+
+    Texture::create(device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+        width: image.width(),
+        height: image.height(),
+        mip_levels: Some((image.width().max(image.height())).ilog2() + 1),
+        data: image.as_bytes(),
+        sampler_info: SamplerOptions::FilterOptions(&sampler_options),
+    })
 }
 
 struct PrimitiveAttributes<'a> {

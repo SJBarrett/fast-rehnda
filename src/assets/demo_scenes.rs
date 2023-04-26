@@ -23,18 +23,18 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     camera.yaw = -97.0;
     commands.insert_resource(camera);
 
-    let textured_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Gooch);
+    let pbr_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Pbr);
     let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
 
     commands.spawn((
         RenderObject {
             relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager),
-            material_handle: textured_material,
+            model_handle: asset_manager.load_gltf(Path::new("../assets/UdemyStylizedBlender/Textures/CannonPaint.gltf"), &mut descriptor_manager),
+            material_handle: pbr_material,
         },
         Actor {
-            transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::IDENTITY, (0.0, 0.0, 0.0).into()),
-            name: "Suzanne".into(),
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(0.01), Quat::from_euler(EulerRot::XYZ, 0.0, 180.0f32.to_radians(), 0.0), (0.0, -1.5, 0.0).into()),
+            name: "Cannon".into(),
         }
     ));
     commands.spawn((

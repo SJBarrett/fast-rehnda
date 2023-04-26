@@ -54,7 +54,9 @@ pub enum Material {
 
 pub struct StdMaterial {
     pub base_color: ColorRgbaF,
-    pub texture: Texture,
+    pub base_color_texture: Texture,
+    pub normal_texture: Texture,
+    pub occlusion_roughness_metal_texture: Texture,
 
     pub descriptor_set: vk::DescriptorSet,
     uniform_buffer: Buffer,
@@ -67,7 +69,7 @@ struct StdMaterialUniform {
 }
 
 impl StdMaterial {
-    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, texture: Texture, base_color: ColorRgbaF) -> Self {
+    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, base_color_texture: Texture, normal_texture: Texture, occlusion_roughness_metal_texture: Texture, base_color: ColorRgbaF) -> Self {
         let uniform = [StdMaterialUniform {
             base_color,
         }];
@@ -80,18 +82,30 @@ impl StdMaterial {
             .buffer(uniform_buffer.buffer)
             .offset(0)
             .range(size_of::<StdMaterialUniform>() as u64);
-        let image_info = vk::DescriptorImageInfo::builder()
+        let base_color_image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(texture.image.image_view)
-            .sampler(texture.sampler);
+            .image_view(base_color_texture.image.image_view)
+            .sampler(base_color_texture.sampler);
+        let normal_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(normal_texture.image.image_view)
+            .sampler(normal_texture.sampler);
+        let occlusion_roughness_metal_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(occlusion_roughness_metal_texture.image.image_view)
+            .sampler(occlusion_roughness_metal_texture.sampler);
 
         let (descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
-            .bind_image(0, image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
-            .bind_buffer(1, material_props_buffer, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_image(0, base_color_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_image(1, normal_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_image(2, occlusion_roughness_metal_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_buffer(3, material_props_buffer, vk::DescriptorType::UNIFORM_BUFFER, vk::ShaderStageFlags::FRAGMENT)
             .build()
             .expect("Failed to allocate bindings");
         Self {
-            texture,
+            base_color_texture,
+            normal_texture,
+            occlusion_roughness_metal_texture,
             base_color,
             descriptor_set,
             uniform_buffer,
