@@ -29,18 +29,18 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     commands.spawn((
         RenderObject {
             relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../assets/UdemyStylizedBlender/Textures/CannonPaint.gltf"), &mut descriptor_manager),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager),
             material_handle: pbr_material,
         },
         Actor {
-            transform: Mat4::from_scale_rotation_translation(Vec3::splat(0.01), Quat::from_euler(EulerRot::XYZ, 0.0, 180.0f32.to_radians(), 0.0), (0.0, -1.5, 0.0).into()),
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(10.0), Quat::from_euler(EulerRot::XYZ, 0.0, 60.0f32.to_radians(), 0.0), (0.0, -1.5, 0.0).into()),
             name: "Cannon".into(),
         }
     ));
     commands.spawn((
         RenderObject {
             relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("assets/models/LightBulb/scene.gltf"), &mut descriptor_manager),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager),
             material_handle: unlit_material,
         },
         Actor {

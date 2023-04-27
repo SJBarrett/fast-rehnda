@@ -10,6 +10,7 @@ pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub texture_coord: Vec2,
+    pub tangent: Vec4,
 }
 
 impl Vertex {
@@ -43,6 +44,13 @@ impl Vertex {
                 .location(2)
                 .format(vk::Format::R32G32_SFLOAT)
                 .offset(offset_of!(Vertex, texture_coord) as u32)
+                .build(),
+            // tangent
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(3)
+                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .offset(offset_of!(Vertex, tangent) as u32)
                 .build(),
         ]
     }

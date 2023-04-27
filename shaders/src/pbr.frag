@@ -25,12 +25,37 @@ layout(location = 2) in vec2 frag_tex_coord;
 
 layout(location = 0) out vec4 out_color;
 
+const float PI = 3.14159265359;
+
 void main() {
     float occlusion = texture(occlusion_roughness_metal_sampler, frag_tex_coord).r;
     float roughness = texture(occlusion_roughness_metal_sampler, frag_tex_coord).g;
-    float metal = texture(occlusion_roughness_metal_sampler, frag_tex_coord).b;
-    vec4 normal = texture(normal_sampler, frag_tex_coord);
-    vec4 base_color = texture(base_color_sampler, frag_tex_coord);
-    out_color = vec4(roughness, roughness, roughness, 1.0);
+    float metallic = texture(occlusion_roughness_metal_sampler, frag_tex_coord).b;
+    vec3 normal = texture(normal_sampler, frag_tex_coord).rgb;
+    normal = normalize(normal * 2.0 - 1.0);
+    // linearise the sRGB texture
+    vec3 albedo = pow(texture(base_color_sampler, frag_tex_coord).rgb, vec3(2.2));
+
+    // ambient lighting
+    float ambient_strength = 0.1;
+    vec3 ambient = ambient_strength * point_light.color;
+
+    // diffsuse lighting
+    vec3 norm = normalize(frag_normal);
+    vec3 light_direction = normalize(point_light.position - frag_position);
+    float diff = max(dot(norm, light_direction), 0.0);
+    vec3 diffuse = diff * point_light.color;
+
+    // specular
+    float specular_strength = 0.5;
+    vec3 view_direction = normalize(transforms.camera_position.xyz - frag_position);
+    vec3 reflect_direction = reflect(-light_direction, norm);
+    float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);
+    vec3 specular = specular_strength * spec * point_light.color;
+
+    vec3 result = (ambient + diffuse + specular) * albedo;
+
+//    out_color = vec4(result, 1.0);
+    out_color = vec4(result, 1.0);
 }
 

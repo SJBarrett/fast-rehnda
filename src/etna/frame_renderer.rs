@@ -3,9 +3,10 @@ use std::mem::size_of;
 
 use ash::vk;
 use bevy_ecs::prelude::*;
+use glam::Mat3;
 
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
-use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
+use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, ModelPushConstants};
 use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
 use crate::assets::demo_scenes::Actor;
@@ -190,10 +191,15 @@ fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeli
 }
 
 fn draw_object(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, world_transform: Mat4) {
-    let transform = world_transform * mesh.relative_transform;
-    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&transform));
+    let model_matrix = world_transform * mesh.relative_transform;
+
+    let push_constant = ModelPushConstants {
+        model_matrix,
+        normal_matrix: model_matrix.inverse().transpose(),
+    };
+    let model_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&push_constant));
     unsafe {
-        device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, model_data);
+        device.cmd_push_constants(frame_data.command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, &[model_data].concat());
         device.cmd_draw_indexed(frame_data.command_buffer, mesh.index_count, 1, 0, 0, 0);
     }
 }
