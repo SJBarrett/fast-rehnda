@@ -72,6 +72,7 @@ impl UiPainter {
                     .max_lod(vk::LOD_CLAMP_NONE)
                     .build()
             ),
+            format: vk::Format::R8G8B8A8_SRGB,
         });
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)

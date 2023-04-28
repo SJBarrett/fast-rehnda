@@ -84,6 +84,7 @@ fn default_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, c
             address_mode_u: Default::default(),
             address_mode_v: Default::default(),
         }),
+        format: vk::Format::R8G8B8A8_SRGB,
     })
 }
 
@@ -124,13 +125,13 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 
 
     let base_color_texture = base_color_texture.as_ref().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_SRGB)
     }).unwrap_or_else(|| {
-       default_texture(device, physical_device, command_pool, descriptor_manager)
+        default_texture(device, physical_device, command_pool, descriptor_manager)
     });
 
     let normal_texture = material.normal_texture().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
     }).unwrap_or_else(|| {
         default_texture(device, physical_device, command_pool, descriptor_manager)
     });
@@ -138,7 +139,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
     // TODO this assumes that occlusion always uses the R channel, metal B and roughness G. Metal and
     // roughness are always together, but not necessarily occlusion
     let occlusion_roughness_metallic_texture = material.pbr_metallic_roughness().metallic_roughness_texture().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture())
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
     }).unwrap_or_else(|| {
         default_texture(device, physical_device, command_pool, descriptor_manager)
     });
@@ -167,7 +168,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
     }
 }
 
-fn load_gltf_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, texture: &gltf::Texture) -> Texture {
+fn load_gltf_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, texture: &gltf::Texture, format: vk::Format) -> Texture {
     let image = data_buffers.images[texture.index()].to_rgba8();
     let sampler_options = TexSamplerOptions::from_gltf(&texture.sampler());
 
@@ -177,6 +178,7 @@ fn load_gltf_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice,
         mip_levels: Some((image.width().max(image.height())).ilog2() + 1),
         data: image.as_bytes(),
         sampler_info: SamplerOptions::FilterOptions(&sampler_options),
+        format,
     })
 }
 

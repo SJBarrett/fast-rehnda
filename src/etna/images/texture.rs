@@ -25,6 +25,7 @@ impl Drop for Texture {
 pub struct TextureCreateInfo<'a> {
     pub width: u32,
     pub height: u32,
+    pub format: vk::Format,
     pub mip_levels: Option<u32>,
     pub data: &'a [u8],
     pub sampler_info: SamplerOptions<'a>,
@@ -38,6 +39,7 @@ impl Texture {
             width: rgba_img.width(),
             height: rgba_img.height(),
             data: rgba_img.as_bytes(),
+            format: vk::Format::R8G8B8A8_SRGB,
             mip_levels: Some((rgba_img.width().max(rgba_img.height())).ilog2() + 1),
             sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
                 min_filter: None,
@@ -61,7 +63,7 @@ impl Texture {
             width: create_info.width,
             height: create_info.height,
             mip_levels,
-            format: vk::Format::R8G8B8A8_SRGB,
+            format: create_info.format,
             tiling: vk::ImageTiling::OPTIMAL,
             usage: vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,

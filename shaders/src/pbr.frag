@@ -22,6 +22,8 @@ layout(set = 2, binding = 0) uniform PointLight {
 layout(location = 0) in vec3 frag_position;
 layout(location = 1) in vec3 frag_normal;
 layout(location = 2) in vec2 frag_tex_coord;
+layout(location = 3) in mat3 tbn;
+
 
 layout(location = 0) out vec4 out_color;
 
@@ -32,30 +34,32 @@ void main() {
     float roughness = texture(occlusion_roughness_metal_sampler, frag_tex_coord).g;
     float metallic = texture(occlusion_roughness_metal_sampler, frag_tex_coord).b;
     vec3 normal = texture(normal_sampler, frag_tex_coord).rgb;
-    normal = normalize(normal * 2.0 - 1.0);
+    normal = normal * 2.0 - 1.0;
+    normal = normalize(tbn * normal);
+
+
     // linearise the sRGB texture
-    vec3 albedo = pow(texture(base_color_sampler, frag_tex_coord).rgb, vec3(2.2));
+    vec3 albedo = texture(base_color_sampler, frag_tex_coord).rgb;
 
     // ambient lighting
     float ambient_strength = 0.1;
     vec3 ambient = ambient_strength * point_light.color;
 
     // diffsuse lighting
-    vec3 norm = normalize(frag_normal);
     vec3 light_direction = normalize(point_light.position - frag_position);
-    float diff = max(dot(norm, light_direction), 0.0);
+    float diff = max(dot(normal, light_direction), 0.0);
     vec3 diffuse = diff * point_light.color;
 
-    // specular
+    // specular (Blinn-Phong specular)
     float specular_strength = 0.5;
     vec3 view_direction = normalize(transforms.camera_position.xyz - frag_position);
-    vec3 reflect_direction = reflect(-light_direction, norm);
-    float spec = pow(max(dot(view_direction, reflect_direction), 0.0), 32);
+    vec3 halfway_direction = normalize(light_direction + view_direction);
+    float spec = pow(max(dot(normal, halfway_direction), 0.0), 32);
     vec3 specular = specular_strength * spec * point_light.color;
+
 
     vec3 result = (ambient + diffuse + specular) * albedo;
 
-//    out_color = vec4(result, 1.0);
     out_color = vec4(result, 1.0);
 }
 
