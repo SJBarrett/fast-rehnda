@@ -45,7 +45,7 @@ void main() {
     float ambient_strength = 0.1;
     vec3 ambient = ambient_strength * point_light.color;
 
-    // diffsuse lighting
+    // diffuse lighting
     vec3 light_direction = normalize(point_light.position - frag_position);
     float diff = max(dot(normal, light_direction), 0.0);
     vec3 diffuse = diff * point_light.color;
@@ -53,9 +53,14 @@ void main() {
     // specular (Blinn-Phong specular)
     float specular_strength = 0.5;
     vec3 view_direction = normalize(transforms.camera_position.xyz - frag_position);
+    float incidence_angle = clamp(dot(normal, light_direction), 0, 1);
+
     vec3 halfway_direction = normalize(light_direction + view_direction);
-    float spec = pow(max(dot(normal, halfway_direction), 0.0), 32);
-    vec3 specular = specular_strength * spec * point_light.color;
+    float blinn_term = dot(normal, halfway_direction);
+    blinn_term = clamp(blinn_term, 0, 1);
+    blinn_term = incidence_angle != 0.0 ? blinn_term : 0.0;
+    blinn_term = pow(blinn_term, 256);
+    vec3 specular = specular_strength * blinn_term * point_light.color;
 
 
     vec3 result = (ambient + diffuse + specular) * albedo;

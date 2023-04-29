@@ -29,6 +29,7 @@ void main() {
 
     vec3 t = normalize(vec3(constants.model * vec4(inTangent.xyz, 0.0)));
     vec3 n = normalize(frag_normal);
+    t = normalize(t - dot(t, n) * n);
     vec3 b = cross(n, t);
     tbn = mat3(t, b, n);
 }
