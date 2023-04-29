@@ -44,10 +44,13 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
             material_handle: unlit_material,
         },
         Actor {
-            transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (5.0, 5.0, 5.0).into()),
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (2.0, 2.0, 2.0).into()),
             name: "LightBulb".into(),
         },
-        PointLight::default(),
+        PointLight {
+            light_color: (1.0, 1.0, 1.0).into(),
+            emissivity: 100.0,
+        },
     ));
 }
 

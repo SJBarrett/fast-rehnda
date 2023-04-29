@@ -39,39 +39,50 @@ void main() {
     float occlusion = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).r;
     float roughness = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).g;
     float metallic = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).b;
+    vec3 albedo = texture(base_color_sampler, vs_out.tex_coord).rgb;
     vec3 normal = texture(normal_sampler, vs_out.tex_coord).rgb;
     normal = normal * 2.0 - 1.0;
     normal = normalize(vs_out.tbn * normal);
 
-
-    // linearise the sRGB texture
-    vec3 albedo = texture(base_color_sampler, vs_out.tex_coord).rgb;
-
-    // ambient lighting
-    float ambient_strength = 0.1;
-    vec3 ambient = ambient_strength * point_light.color;
-
-    // diffuse lighting
-    vec3 light_direction = normalize(point_light.position - vs_out.position);
-    float diff = max(dot(normal, light_direction), 0.0);
-    vec3 diffuse = diff * point_light.color;
-
-    // specular (Blinn-Phong specular)
-    float specular_strength = 0.5;
     vec3 view_direction = normalize(transforms.camera_position.xyz - vs_out.position);
-    float incidence_angle = clamp(dot(normal, light_direction), 0, 1);
+    vec3 f0 = vec3(0.04);
+    f0 = mix(f0, albedo, metallic);
 
-    vec3 halfway_direction = normalize(light_direction + view_direction);
-    float blinn_term = dot(normal, halfway_direction);
-    blinn_term = clamp(blinn_term, 0, 1);
-    blinn_term = incidence_angle != 0.0 ? blinn_term : 0.0;
-    blinn_term = pow(blinn_term, 256);
-    vec3 specular = specular_strength * blinn_term * point_light.color;
+    vec3 accumulated_lighting = vec3(0.0);
 
+    // ------------------------ start per light calculations ------------------------
+    vec3 light_direction = normalize(point_light.position - vs_out.position);
+    vec3 half_vector = normalize(view_direction + light_direction);
+    float light_distance = length(point_light.position - vs_out.position);
+    float attenuation = point_light.emissivity / (light_distance * light_distance);
+    vec3 radiance = point_light.color * attenuation;
 
-    vec3 result = (ambient + diffuse + specular) * albedo;
+    // cook-torrance brdf
+    float normal_distribution_function = distribution_ggx(normal, half_vector, roughness);
+    float geometry = geometry_smith(normal, view_direction, light_direction, roughness);
+    vec3 fresnel = fresnel_schlick(max(dot(half_vector, view_direction), 0.0), f0);
 
-    out_color = vec4(result, 1.0);
+    vec3 k_specular = fresnel;
+    vec3 k_diffuse = vec3(1.0) - k_specular;
+    k_diffuse *= 1.0 - metallic;
+
+    vec3 numerator = normal_distribution_function * geometry * fresnel;
+    float denominator = 4.0 * max(dot(normal, view_direction), 0.0) * max(dot(normal, light_direction), 0.0) + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    float normal_dot_light = max(dot(normal, light_direction), 0.0);
+    accumulated_lighting += (k_diffuse * albedo / PI + specular) * radiance * normal_dot_light;
+
+    // ------------------------ end per light calculations ------------------------
+
+    vec3 ambient = vec3(0.03) * albedo * occlusion;
+    vec3 color = ambient + accumulated_lighting;
+
+    // reinhard tone map
+    color = color / (color + vec3(1.0));
+
+    // gamma correction done due by sRGB surface format
+    out_color = vec4(color, 1.0);
 }
 
 float distribution_ggx(vec3 normal, vec3 half_vector, float a) {
