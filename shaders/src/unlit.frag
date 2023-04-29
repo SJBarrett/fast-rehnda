@@ -14,13 +14,15 @@ layout(set = 1, binding = 3) uniform MaterialProps {
     vec4 base_color;
 } material_props;
 
-layout(location = 0) in vec3 frag_position;
-layout(location = 1) in vec3 frag_normal;
-layout(location = 2) in vec2 frag_tex_coord;
-layout(location = 3) in mat3 tbn;
+layout(location = 0) in VS_OUT {
+    vec3 position;
+    vec3 normal;
+    vec2 tex_coord;
+    mat3 tbn;
+} vs_out;
 
 layout(location = 0) out vec4 out_color;
 
 void main() {
-    out_color = texture(base_color_sampler, frag_tex_coord) * material_props.base_color;
+    out_color = texture(base_color_sampler, vs_out.tex_coord) * material_props.base_color;
 }

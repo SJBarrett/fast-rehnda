@@ -19,6 +19,7 @@ pub enum Shader {
     Gooch,
     Unlit,
     Pbr,
+    BlinnPhong,
 }
 
 impl Shader {
@@ -35,6 +36,9 @@ impl Shader {
             }
             Shader::Pbr => {
                 ("shaders/spirv/shader.vert_spv", "shaders/spirv/pbr.frag_spv")
+            }
+            Shader::BlinnPhong => {
+                ("shaders/spirv/shader.vert_spv", "shaders/spirv/blinnphong.frag_spv")
             }
         }
     }

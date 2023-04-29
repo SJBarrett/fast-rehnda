@@ -26,14 +26,10 @@ layout(location = 0) in VS_OUT {
     mat3 tbn;
 } vs_out;
 
+
 layout(location = 0) out vec4 out_color;
 
 const float PI = 3.14159265359;
-
-float distribution_ggx(vec3 normal, vec3 half_vector, float a);
-float geometry_schlick_ggx(float normal_dot_view, float k);
-float geometry_smith(vec3 normal, vec3 view_direction, vec3 light_direction, float k);
-vec3 fresnel_schlick(float cos_theta, vec3 f0);
 
 void main() {
     float occlusion = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).r;
@@ -74,35 +70,3 @@ void main() {
     out_color = vec4(result, 1.0);
 }
 
-float distribution_ggx(vec3 normal, vec3 half_vector, float a) {
-    float a2 = a*a;
-    float NdotH = max(dot(normal, half_vector), 0.0);
-    float NdotH2 = NdotH*NdotH;
-    float nom = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-    return nom / denom;
-}
-
-float geometry_schlick_ggx(float normal_dot_view, float k)
-{
-    float nom   = normal_dot_view;
-    float denom = normal_dot_view * (1.0 - k) + k;
-
-    return nom / denom;
-}
-
-float geometry_smith(vec3 normal, vec3 view_direction, vec3 light_direction, float k)
-{
-    float normal_dot_view = max(dot(normal, view_direction), 0.0);
-    float normal_dot_light = max(dot(normal, light_direction), 0.0);
-    float ggx1 = geometry_schlick_ggx(normal_dot_view, k);
-    float ggx2 = geometry_schlick_ggx(normal_dot_light, k);
-
-    return ggx1 * ggx2;
-}
-
-vec3 fresnel_schlick(float cos_theta, vec3 f0)
-{
-    return f0 + (1.0 - f0) * pow(1.0 - cos_theta, 5.0);
-}
