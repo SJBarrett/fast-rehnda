@@ -7,6 +7,7 @@ use std::path::Path;
 
 use ahash::AHashMap;
 use ash::vk;
+use bevy_ecs::prelude::info;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec4Swizzles};
 use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
@@ -16,6 +17,7 @@ use gltf::material::NormalTexture;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout, RgbaImage};
 use lazy_static::lazy_static;
+use log::info;
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
@@ -97,7 +99,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
 
     let position_accessor: BufferAccessor<Vec3> = primitive_attributes.attribute_accessor(Semantic::Positions).unwrap();
     // TODO handle when no tangents exist on a model
-    let tangent_accessor: BufferAccessor<Vec4> = primitive_attributes.attribute_accessor(Semantic::Tangents).unwrap();
+    let tangent_accessor: BufferAccessor<[f32; 4]> = primitive_attributes.attribute_accessor(Semantic::Tangents).unwrap();
     let normal_accessor: BufferAccessor<Vec3> = primitive_attributes.attribute_accessor(Semantic::Normals).unwrap();
     let base_color_tex_coord_accessor = base_color_tex_coord_index.and_then(|index| primitive_attributes.attribute_accessor::<Vec2>(Semantic::TexCoords(index)));
 
@@ -110,7 +112,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
                 position,
                 normal,
                 texture_coord: base_color_tex_coord_accessor.as_ref().map_or(Vec2::ZERO, |accessor| accessor.data_at_index(i)),
-                tangent,
+                tangent: Vec4::new(tangent[0], tangent[1], tangent[2], tangent[3]),
             }
         })
         .collect();
@@ -325,11 +327,6 @@ struct BufferAccessor<'a, T> where T: Zeroable, T: Pod {
 }
 
 impl<'a, T> BufferAccessor<'a, T> where T: Zeroable, T: Pod {
-    fn for_attribute(semantic: Semantic, attributes_map: &AHashMap<Semantic, Accessor>, data_buffers: &'a SourcesData) -> Option<Self> {
-        let accessor = attributes_map.get(&semantic);
-        accessor.map(|acc| BufferAccessor::<T>::new(data_buffers, acc))
-    }
-
     fn new(buffers: &'a SourcesData, accessor: &Accessor) -> Self {
         let view = accessor.view().unwrap();
         let stride = view.stride().unwrap_or_else(|| accessor.size());

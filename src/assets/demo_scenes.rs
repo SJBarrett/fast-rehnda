@@ -29,7 +29,7 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     commands.spawn((
         RenderObject {
             relative_transform: Default::default(),
-            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/FlightHelmet/glTF/FlightHelmet.glb"), &mut descriptor_manager),
             material_handle: pbr_material,
         },
         Actor {
