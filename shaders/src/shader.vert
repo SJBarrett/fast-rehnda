@@ -18,7 +18,6 @@ layout(location = 3) in vec4 inTangent;
 
 layout(location = 0) out VS_OUT {
     vec3 position;
-    vec3 normal;
     vec2 tex_coord;
     mat3 tbn;
 } vs_out;
@@ -26,11 +25,11 @@ layout(location = 0) out VS_OUT {
 void main() {
     gl_Position = transforms.projection * transforms.view * constants.model * vec4(inPosition, 1.0);
     vs_out.tex_coord = inTexCoord;
-    vs_out.normal = vec3(constants.normal_matrix * vec4(inNormal, 0));
+    vec3 normal = vec3(constants.normal_matrix * vec4(inNormal, 0));
     vs_out.position = (constants.model * vec4(inPosition, 1.0)).xyz;
 
     vec3 t = normalize(vec3(constants.model * vec4(inTangent.xyz, 0.0)));
-    vec3 n = normalize(vs_out.normal);
+    vec3 n = normalize(normal);
     t = normalize(t - dot(t, n) * n);
     vec3 b = cross(n, t);
     vs_out.tbn = mat3(t, b, n);

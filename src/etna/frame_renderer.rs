@@ -189,7 +189,7 @@ fn bind_material_pipeline(device: &Device, swapchain: &Swapchain, pipeline: &Mat
 
 fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &PbrMaterial, light_data: &LightingDataManager) {
     unsafe {
-        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set, light_data.descriptor_set], &[]);
+        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set(), light_data.descriptor_set], &[]);
     }
 }
 

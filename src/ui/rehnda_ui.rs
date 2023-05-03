@@ -1,16 +1,15 @@
-use bevy_ecs::prelude::{NonSend, Res, ResMut};
+use bevy_ecs::prelude::*;
 use bevy_ecs::system::{NonSendMut, Query};
 use egui::{DragValue, Separator, Ui};
 
 use crate::ecs_engine::EtnaWindow;
 use crate::assets::Camera;
-use crate::assets::demo_scenes::Actor;
+use crate::assets::demo_scenes::{Actor, ShouldDrawDebug};
 use crate::assets::light_source::PointLight;
-use crate::assets::render_object::{RenderObject, Transform};
-use crate::rehnda_core::Mat4;
+use crate::assets::render_object::{Transform};
 use crate::ui::ui_painter::{EguiOutput, ScreenState};
 
-pub fn ui_builder_system(mut camera: ResMut<Camera>, mut actors: Query<(&Actor, &mut Transform)>, mut lights: Query<&mut PointLight>, egui_ctx: NonSend<egui::Context>, mut winit_state: NonSendMut<egui_winit::State>, mut ui_output: ResMut<EguiOutput>, window: Res<EtnaWindow>) {
+pub fn ui_builder_system(mut camera: ResMut<Camera>, mut actors: Query<(&Actor, &mut Transform), With<ShouldDrawDebug>>, mut lights: Query<&mut PointLight>, egui_ctx: NonSend<egui::Context>, mut winit_state: NonSendMut<egui_winit::State>, mut ui_output: ResMut<EguiOutput>, window: Res<EtnaWindow>) {
     let new_input = winit_state.take_egui_input(&window.winit_window);
     let full_output = egui_ctx.run(new_input, |egui_ctx| {
         draw_ui(egui_ctx, &mut camera, actors, lights);
@@ -25,7 +24,7 @@ pub fn ui_builder_system(mut camera: ResMut<Camera>, mut actors: Query<(&Actor, 
     ui_output.texture_delta = full_output.textures_delta;
 }
 
-fn draw_ui(egui_ctx: &egui::Context, camera: &mut Camera, mut actors: Query<(&Actor, &mut Transform)>, mut lights: Query<(&mut PointLight)>) {
+fn draw_ui(egui_ctx: &egui::Context, camera: &mut Camera, mut actors: Query<(&Actor, &mut Transform), With<ShouldDrawDebug>>, mut lights: Query<(&mut PointLight)>) {
     egui::Window::new("Scene").show(egui_ctx, |ui| {
         ui.heading("Camera");
         ui.label(format!("x: {:.1}, y: {:.1}, z: {:.1}", camera.position.x, camera.position.y, camera.position.z));

@@ -9,7 +9,7 @@ use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::material_server::MaterialPipelineHandle;
-use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, RenderObject};
+use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, PbrMaterialUniforms, RenderObject};
 
 pub struct LoadedGltfMesh {
     pub mesh_handle: MeshHandle,
@@ -55,6 +55,14 @@ impl AssetManager {
                 material_pipeline_handle: pipeline,
             }
         }).collect()
+    }
+
+    pub fn duplicate_material_with_uniforms(&mut self, material: &MaterialHandle, descriptor_manager: &mut DescriptorManager, new_uniforms: PbrMaterialUniforms) -> MaterialHandle {
+        let material = self.materials.get(material).unwrap();
+        let new_material = material.copy_with_new_uniforms(self.device, &self.resource_command_pool, descriptor_manager, new_uniforms);
+        let handle = MaterialHandle::new(self.materials.len() as u32);
+        self.materials.insert(handle, new_material);
+        handle
     }
 
     pub fn mesh_ref(&self, mesh_handle: &MeshHandle) -> &Mesh {
