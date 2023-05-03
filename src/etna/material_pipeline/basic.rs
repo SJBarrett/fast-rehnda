@@ -5,7 +5,7 @@ use std::path::Path;
 use ash::vk;
 use bytemuck_derive::{Pod, Zeroable};
 
-use crate::rehnda_core::{ConstPtr, Mat3, Mat4};
+use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::etna::{Device, GraphicsSettings, Swapchain};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;

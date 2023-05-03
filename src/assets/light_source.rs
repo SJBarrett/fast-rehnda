@@ -1,11 +1,10 @@
-use std::mem::size_of;
 use ash::vk;
 use bevy_ecs::prelude::*;
 use crevice::std140::AsStd140;
 use glam::Vec4Swizzles;
 use crate::assets::demo_scenes::Actor;
-use crate::assets::render_object::RenderObject;
-use crate::etna::{Buffer, Device, HostMappedBuffer, HostMappedBufferCreateInfo};
+use crate::assets::render_object::Transform;
+use crate::etna::{Device, HostMappedBuffer, HostMappedBufferCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ConstPtr, Vec3};
 
@@ -59,10 +58,10 @@ impl LightingDataManager {
     }
 }
 
-pub fn update_lights_system(mut lighting_data_manager: ResMut<LightingDataManager>, lights: Query<(&Actor, &PointLight)>) {
-    if let Some((object, light)) = lights.iter().nth(0) {
+pub fn update_lights_system(mut lighting_data_manager: ResMut<LightingDataManager>, lights: Query<(&Transform, &PointLight)>) {
+    if let Some((transform, light)) = lights.iter().nth(0) {
         let light_uniform = PointLightUniform {
-            position: object.transform.w_axis.xyz(),
+            position: transform.translation,
             light_color: light.light_color,
             emissivity: light.emissivity,
         }.as_std140();

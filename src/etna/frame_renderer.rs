@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use ash::vk;
 use bevy_ecs::prelude::*;
-use glam::Mat3;
+use bevy_hierarchy::Children;
 
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, ModelPushConstants};
@@ -12,7 +12,7 @@ use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
 use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialPipelineHandle, MaterialServer};
-use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject};
+use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject, Transform};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -48,7 +48,8 @@ pub fn draw_system(
     asset_manager: Res<AssetManager>,
     material_server: Res<MaterialServer>,
     camera: Res<Camera>,
-    query: Query<(&Actor, &RenderObject)>,
+    actors_query: Query<(&Transform, &Children), With<Actor>>,
+    render_objects_query: Query<(&Transform, &RenderObject)>,
     mut ui_painter: ResMut<UiPainter>,
     ui_output: Res<EguiOutput>,
     lights: Res<LightingDataManager>,
@@ -73,41 +74,45 @@ pub fn draw_system(
     let mut last_material_pipeline_handle = MaterialPipelineHandle::null();
     let mut last_material_pipeline: Option<&MaterialPipeline> = None;
     let mut last_material_handle = MaterialHandle::null();
-    let mut last_material: Option<&Material> = None;
     let mut last_mesh_handle = MeshHandle::null();
     let mut last_mesh: Option<&Mesh> = None;
-    for (actor, object) in query.iter() {
-        let is_different_material = last_material_pipeline_handle.is_null() || last_material_pipeline_handle != object.material_handle;
-        if let Some(loaded_material) = material_server.material_ref(&object.material_handle) {
-            if is_different_material {
-                last_material_pipeline = Some(loaded_material);
-                bind_material_pipeline(&frame_renderer.device, &swapchain, loaded_material, frame_data);
-            }
-        } else {
-            continue;
-        }
 
-        let current_material = unsafe { last_material_pipeline.unwrap_unchecked() };
+    for (parent_transform, children) in actors_query.iter() {
+        for child_render_object in children {
+            if let Ok((render_object_relative_transform, render_object)) = render_objects_query.get(*child_render_object) {
+                // TODO support relative transforms
+                let mesh_handle = render_object.mesh_handle;
+                let is_different_material = last_material_pipeline_handle.is_null() || last_material_pipeline_handle != render_object.material_pipeline_handle;
+                if let Some(loaded_material) = material_server.material_ref(&render_object.material_pipeline_handle) {
+                    if is_different_material {
+                        last_material_pipeline = Some(loaded_material);
+                        bind_material_pipeline(&frame_renderer.device, &swapchain, loaded_material, frame_data);
+                    }
+                } else {
+                    continue;
+                }
 
-        for &mesh_handle in asset_manager.meshes_ref(&object.model_handle) {
-            // new model so bind model specific resources
-            if last_mesh_handle.is_null() || last_mesh_handle != mesh_handle {
-                let mesh = asset_manager.mesh_ref(&mesh_handle);
-                last_mesh = Some(mesh);
-                bind_model(&frame_renderer.device, frame_data, mesh);
-            }
-            let mesh_material_handle = last_mesh.unwrap().material_handle;
-            // new material so bind material specific resources
-            if last_material_handle.is_null() || last_material_handle != mesh_material_handle {
-                let material = asset_manager.material_ref(&mesh_material_handle);
-                last_material = Some(material);
-                bind_material(&frame_renderer.device, frame_data, current_material, material, &lights);
-            }
+                let current_material = unsafe { last_material_pipeline.unwrap_unchecked() };
+                // new model so bind model specific resources
+                if last_mesh_handle.is_null() || last_mesh_handle != mesh_handle {
+                    let mesh = asset_manager.mesh_ref(&mesh_handle);
+                    last_mesh = Some(mesh);
+                    bind_model(&frame_renderer.device, frame_data, mesh);
+                }
+                let mesh_material_handle = render_object.material_instance_handle;
+                // new material so bind material specific resources
+                if last_material_handle.is_null() || last_material_handle != mesh_material_handle {
+                    let material = asset_manager.material_ref(&mesh_material_handle);
+                    last_material_handle = mesh_material_handle;
+                    bind_material(&frame_renderer.device, frame_data, current_material, material, &lights);
+                }
 
-            let current_model = unsafe { last_mesh.unwrap_unchecked() };
-            draw_object(&frame_renderer.device, frame_data, current_material, current_model, actor.transform);
-            last_material_pipeline_handle = object.material_handle;
-            last_mesh_handle = mesh_handle;
+                let current_model = unsafe { last_mesh.unwrap_unchecked() };
+                draw_object(&frame_renderer.device, frame_data, current_material, current_model, parent_transform.matrix());
+                last_material_pipeline_handle = render_object.material_pipeline_handle;
+                last_mesh_handle = mesh_handle;
+
+            };
         }
     }
 
@@ -187,11 +192,6 @@ fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPip
         Material::Standard(std_material) => {
             unsafe {
                 device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set, light_data.descriptor_set], &[]);
-            }
-        }
-        _ => {
-            unsafe {
-                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
             }
         }
     }

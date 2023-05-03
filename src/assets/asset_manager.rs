@@ -8,14 +8,19 @@ use crate::etna::{CommandPool, Device, PhysicalDevice};
 use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
-use crate::assets::render_object::{Material, MaterialHandle, Mesh, MultiMeshModel};
+use crate::assets::material_server::MaterialPipelineHandle;
+use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject};
+
+pub struct LoadedGltfMesh {
+    pub mesh_handle: MeshHandle,
+    pub material_handle: MaterialHandle,
+}
 
 #[derive(Resource)]
 pub struct AssetManager {
     device: ConstPtr<Device>,
     physical_device: ConstPtr<PhysicalDevice>,
     resource_command_pool: CommandPool,
-    models: AHashMap<ModelHandle, Vec<MeshHandle>>,
     meshes: AHashMap<MeshHandle, Mesh>,
     materials: AHashMap<MaterialHandle, Material>,
 }
@@ -26,33 +31,30 @@ impl AssetManager {
             device,
             physical_device,
             resource_command_pool,
-            models: AHashMap::new(),
             meshes: AHashMap::new(),
             materials: AHashMap::new(),
         }
     }
 
-    pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager) -> ModelHandle {
+    pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager, pipeline: MaterialPipelineHandle) -> Vec<RenderObject> {
         let (meshes, materials, mesh_material_indices) = gltf_loader::load_gltf(self.device, &self.physical_device, &self.resource_command_pool, descriptor_manager, gltf_path);
+
         let material_handles: Vec<MaterialHandle> = materials.into_iter().map(|material| {
             let material_handle = MaterialHandle::new(self.materials.len() as u32);
             self.materials.insert(material_handle, material);
             material_handle
         }).collect();
-        let mesh_handles: Vec<MeshHandle> = std::iter::zip(meshes.into_iter(), mesh_material_indices.into_iter()).map(|(mut mesh, material_index)| {
-            let mesh_handle = MeshHandle::new(self.meshes.len() as u32);
-            let material_handle = material_handles[material_index];
-            mesh.material_handle = material_handle;
-            self.meshes.insert(mesh_handle, mesh);
-            mesh_handle
-        }).collect();
-        let handle = ModelHandle::new(self.models.len() as u32);
-        self.models.insert(handle, mesh_handles);
-        handle
-    }
 
-    pub fn meshes_ref(&self, model_handle: &ModelHandle) -> &[MeshHandle] {
-        unsafe { self.models.get(model_handle).unwrap_unchecked().as_slice() }
+        std::iter::zip(meshes.into_iter(), mesh_material_indices.into_iter()).into_iter().map(|(mesh, mesh_material_index)| {
+            let mesh_handle = MeshHandle::new(self.meshes.len() as u32);
+            self.meshes.insert(mesh_handle, mesh);
+            let material_handle = material_handles[mesh_material_index];
+            RenderObject {
+                mesh_handle,
+                material_instance_handle: material_handle,
+                material_pipeline_handle: pipeline,
+            }
+        }).collect()
     }
 
     pub fn mesh_ref(&self, mesh_handle: &MeshHandle) -> &Mesh {
@@ -65,7 +67,6 @@ impl AssetManager {
 }
 
 pub type MeshHandle = AssetHandle<Mesh>;
-pub type ModelHandle = AssetHandle<MultiMeshModel>;
 
 #[derive(Debug)]
 pub struct AssetHandle<T> {

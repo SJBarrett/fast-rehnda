@@ -1,23 +1,18 @@
 use std::{fs, io, mem};
-use std::fmt::Debug;
 use std::io::Read;
 use std::mem::MaybeUninit;
-use std::ops::Index;
 use std::path::Path;
 
 use ahash::AHashMap;
 use ash::vk;
-use bevy_ecs::prelude::info;
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Quat, Vec4Swizzles};
+use glam::{Mat4, Quat};
 use gltf::{Accessor, Gltf, Node, Semantic};
 use gltf::buffer;
 use gltf::json::accessor::ComponentType;
-use gltf::material::NormalTexture;
 use gltf::scene::Transform;
 use image::{DynamicImage, EncodableLayout, RgbaImage};
 use lazy_static::lazy_static;
-use log::info;
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
@@ -73,7 +68,7 @@ fn gltf_transform_to_mat4(transform: Transform) -> Mat4 {
     }
 }
 
-fn missing_texture() -> image::RgbaImage {
+fn missing_texture() -> RgbaImage {
     let img_path = Path::new("assets/debug/missing_texture_image.jpg");
     image::open(img_path).expect("Failed to open gltf image").to_rgba8()
 }
@@ -173,7 +168,6 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, command_pool: &CommandPo
         index_buffer,
         index_count: indices.len() as u32,
         relative_transform: Mat4::IDENTITY,
-        material_handle: MaterialHandle::null(),
     }
 }
 
@@ -278,7 +272,7 @@ impl<'a> SourcesData<'a> {
             let image = match image.source() {
                 gltf::image::Source::View {
                     view,
-                    mime_type,
+                    mime_type: _mime_type,
                 } => {
                     match &buffer_data {
                         BufferData::Source(_) => {
@@ -292,7 +286,7 @@ impl<'a> SourcesData<'a> {
                 }
                 gltf::image::Source::Uri {
                     uri,
-                    mime_type,
+                    mime_type: _mime_type,
                 } => {
                     let decoded = urlencoding::decode(uri).unwrap();
                     let img_path = working_dir.join(Path::new(decoded.as_ref()));

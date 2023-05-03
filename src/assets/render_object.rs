@@ -6,37 +6,38 @@ use bytemuck_derive::{Pod, Zeroable};
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
-use crate::rehnda_core::{ColorRgbaF, ConstPtr, Mat4};
-use crate::assets::{AssetHandle, ModelHandle};
+use crate::rehnda_core::{ColorRgbaF, ConstPtr, Mat4, Quat, Vec3};
+use crate::assets::{AssetHandle, MeshHandle};
 use crate::assets::material_server::MaterialPipelineHandle;
 
 #[derive(Component)]
+pub struct Transform {
+    pub translation: Vec3,
+    pub rotation: Quat,
+    pub scale: Vec3,
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
+    }
+}
+
+impl Transform {
+    pub fn matrix(&self) -> Mat4 {
+        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
+    }
+}
+
+#[derive(Component)]
 pub struct RenderObject {
-    pub relative_transform: Mat4,
-    pub model_handle: ModelHandle,
-    pub material_handle: MaterialPipelineHandle,
-}
-
-impl RenderObject {
-    pub fn new_with_transform(model_handle: ModelHandle, material_handle: MaterialPipelineHandle) -> RenderObject {
-        RenderObject {
-            relative_transform: Mat4::IDENTITY,
-            model_handle,
-            material_handle,
-        }
-    }
-}
-
-pub struct MultiMeshModel {
-    pub meshes: Vec<Mesh>,
-}
-
-impl MultiMeshModel {
-    pub fn with_single_mesh(mesh: Mesh) -> Self {
-        MultiMeshModel {
-            meshes: vec![mesh],
-        }
-    }
+    pub mesh_handle: MeshHandle,
+    pub material_instance_handle: MaterialHandle,
+    pub material_pipeline_handle: MaterialPipelineHandle,
 }
 
 pub struct Mesh {
@@ -44,7 +45,6 @@ pub struct Mesh {
     pub index_buffer: Buffer,
     pub index_count: u32,
     pub relative_transform: Mat4,
-    pub material_handle: MaterialHandle,
 }
 
 pub type MaterialHandle = AssetHandle<Material>;

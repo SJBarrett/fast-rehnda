@@ -26,6 +26,7 @@ egui-winit = "0.21.1"
 # Game frameworks
 bevy_app = "0.10.0"
 bevy_ecs = "0.10.0"
+bevy_hierarchy = "0.10.0"
 bevy_time = "0.10.0"
 # assets
 gltf = "1.1.0"

@@ -45,8 +45,7 @@ impl InputState {
 
 pub mod input_systems {
     use bevy_ecs::prelude::*;
-    use log::info;
-    use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
+    use winit::event::{ElementState, KeyboardInput};
     use crate::rehnda_core::input::{InputState, KeyState, KeyStateChange};
 
     pub fn input_system(mut input_state: ResMut<InputState>, mut keyboard_events: EventReader<KeyboardInput>) {

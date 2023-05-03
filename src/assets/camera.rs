@@ -2,10 +2,10 @@ use bevy_ecs::prelude::*;
 use bevy_time::Time;
 use bytemuck_derive::{Pod, Zeroable};
 use glam::Vec4;
-use winit::event::{KeyboardInput, VirtualKeyCode};
+use winit::event::{VirtualKeyCode};
 
 use crate::rehnda_core::{Mat4, Vec3};
-use crate::rehnda_core::input::{InputState, KeyState};
+use crate::rehnda_core::input::{InputState};
 
 #[repr(C)]
 #[derive(Zeroable, Pod, Debug, Copy, Clone)]

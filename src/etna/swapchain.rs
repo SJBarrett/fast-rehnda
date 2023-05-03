@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 use log::debug;
 
 use crate::etna;
-use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, PhysicalDeviceRes, QueueFamilyIndices, Surface};
+use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices, Surface};
 use crate::rehnda_core::ConstPtr;
 
 #[derive(Resource)]
