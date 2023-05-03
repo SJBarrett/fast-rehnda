@@ -17,20 +17,20 @@ use lazy_static::lazy_static;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3, Vec4};
-use crate::assets::render_object::{Material, MaterialHandle, Mesh, StdMaterial};
+use crate::assets::render_object::{Mesh, PbrMaterial};
 use crate::assets::Vertex;
 
 lazy_static! {
     static ref MISSING_TEXTURE_IMG: RgbaImage = missing_texture();
 }
 
-pub type MeshesAndMaterials = (Vec<Mesh>, Vec<Material>, Vec<usize>);
+pub type MeshesAndMaterials = (Vec<Mesh>, Vec<PbrMaterial>, Vec<usize>);
 
 pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MeshesAndMaterials {
     let working_dir = gltf_path.parent().unwrap();
     let gltf = read_gltf_file(gltf_path);
     let sources_data = SourcesData::load_data_into_memory(&gltf, working_dir);
-    let materials: Vec<Material> = gltf.materials()
+    let materials: Vec<PbrMaterial> = gltf.materials()
         .map(|gltf_material| load_gltf_material(device, physical_device, command_pool, descriptor_manager, &sources_data, &gltf_material))
         .collect();
     let mut meshes: Vec<Mesh> = Vec::new();
@@ -90,7 +90,7 @@ fn default_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, c
     })
 }
 
-fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, gltf_material: &gltf::material::Material) -> Material {
+fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, gltf_material: &gltf::material::Material) -> PbrMaterial {
     let base_color_texture = gltf_material.pbr_metallic_roughness().base_color_texture();
     let base_color_tex_coord_index = base_color_texture.as_ref().map(|base_color_texture| base_color_texture.tex_coord());
     assert_eq!(base_color_tex_coord_index.unwrap(), 0, "Currently only support loading gltf models with the attribute TEXCOORD_0");
@@ -116,8 +116,7 @@ fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice
         default_texture(device, physical_device, command_pool, descriptor_manager)
     });
 
-    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, normal_texture, occlusion_roughness_metallic_texture, base_color);
-    Material::Standard(material)
+    PbrMaterial::create(device, command_pool, descriptor_manager, base_color_texture, normal_texture, occlusion_roughness_metallic_texture, base_color)
 }
 
 fn build_mesh_from_primitives(device: ConstPtr<Device>, command_pool: &CommandPool, data_buffers: &SourcesData, primitive: gltf::Primitive) -> Mesh {

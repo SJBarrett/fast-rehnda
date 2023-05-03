@@ -33,7 +33,7 @@ impl Transform {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Copy, Clone)]
 pub struct RenderObject {
     pub mesh_handle: MeshHandle,
     pub material_instance_handle: MaterialHandle,
@@ -47,13 +47,9 @@ pub struct Mesh {
     pub relative_transform: Mat4,
 }
 
-pub type MaterialHandle = AssetHandle<Material>;
+pub type MaterialHandle = AssetHandle<PbrMaterial>;
 
-pub enum Material {
-    Standard(StdMaterial),
-}
-
-pub struct StdMaterial {
+pub struct PbrMaterial {
     pub base_color: ColorRgbaF,
     pub base_color_texture: Texture,
     pub normal_texture: Texture,
@@ -69,7 +65,7 @@ struct StdMaterialUniform {
     pub base_color: ColorRgbaF,
 }
 
-impl StdMaterial {
+impl PbrMaterial {
     pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, base_color_texture: Texture, normal_texture: Texture, occlusion_roughness_metal_texture: Texture, base_color: ColorRgbaF) -> Self {
         let uniform = [StdMaterialUniform {
             base_color,

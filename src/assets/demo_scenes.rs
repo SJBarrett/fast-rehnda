@@ -26,8 +26,9 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
 
     let pbr_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Pbr);
     let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
-    let sphere_model = asset_manager.load_gltf(Path::new("assets/models/Sphere/UvSphere.glb"), &mut descriptor_manager, pbr_material);
+    let sphere_model = asset_manager.load_gltf(Path::new("assets/models/Sphere/UvSphere.glb"), &mut descriptor_manager, pbr_material)[0];
 
+    let sphere_material = asset_manager.material_ref(&sphere_model.material_instance_handle);
 }
 
 pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {

@@ -9,7 +9,7 @@ use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::material_server::MaterialPipelineHandle;
-use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject};
+use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, RenderObject};
 
 pub struct LoadedGltfMesh {
     pub mesh_handle: MeshHandle,
@@ -22,7 +22,7 @@ pub struct AssetManager {
     physical_device: ConstPtr<PhysicalDevice>,
     resource_command_pool: CommandPool,
     meshes: AHashMap<MeshHandle, Mesh>,
-    materials: AHashMap<MaterialHandle, Material>,
+    materials: AHashMap<MaterialHandle, PbrMaterial>,
 }
 
 impl AssetManager {
@@ -61,7 +61,7 @@ impl AssetManager {
         unsafe { self.meshes.get(mesh_handle).unwrap_unchecked() }
     }
 
-    pub fn material_ref(&self, material_handle: &MaterialHandle) -> &Material {
+    pub fn material_ref(&self, material_handle: &MaterialHandle) -> &PbrMaterial {
         unsafe { self.materials.get(material_handle).unwrap_unchecked() }
     }
 }

@@ -12,7 +12,7 @@ use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
 use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialPipelineHandle, MaterialServer};
-use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject, Transform};
+use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, RenderObject, Transform};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -187,13 +187,9 @@ fn bind_material_pipeline(device: &Device, swapchain: &Swapchain, pipeline: &Mat
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
 }
 
-fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &Material, light_data: &LightingDataManager) {
-    match material {
-        Material::Standard(std_material) => {
-            unsafe {
-                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set, light_data.descriptor_set], &[]);
-            }
-        }
+fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &PbrMaterial, light_data: &LightingDataManager) {
+    unsafe {
+        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set, light_data.descriptor_set], &[]);
     }
 }
 
