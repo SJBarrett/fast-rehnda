@@ -11,6 +11,8 @@ layout(set = 1, binding = 1) uniform sampler2D normal_sampler;
 layout(set = 1, binding = 2) uniform sampler2D occlusion_roughness_metal_sampler;
 layout(set = 1, binding = 3) uniform MaterialProps {
     vec4 base_color;
+    float base_roughness;
+    float base_metallic;
 } material_props;
 
 layout(set = 2, binding = 0) uniform PointLight {
@@ -37,9 +39,9 @@ vec3 fresnel_schlick(float cos_theta, vec3 f0);
 
 void main() {
     float occlusion = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).r;
-    float roughness = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).g;
-    float metallic = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).b;
-    vec3 albedo = texture(base_color_sampler, vs_out.tex_coord).rgb;
+    float roughness = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).g * material_props.base_roughness;
+    float metallic = texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).b * material_props.base_metallic;
+    vec3 albedo = texture(base_color_sampler, vs_out.tex_coord).rgb * material_props.base_color.rgb;
     vec3 normal = texture(normal_sampler, vs_out.tex_coord).rgb;
     normal = normal * 2.0 - 1.0;
     normal = normalize(vs_out.tbn * normal);

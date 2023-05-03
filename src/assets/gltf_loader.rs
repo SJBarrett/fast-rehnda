@@ -10,7 +10,7 @@ use ash::vk;
 use bevy_ecs::prelude::info;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec4Swizzles};
-use gltf::{Accessor, Gltf, Node, Primitive, Semantic};
+use gltf::{Accessor, Gltf, Node, Semantic};
 use gltf::buffer;
 use gltf::json::accessor::ComponentType;
 use gltf::material::NormalTexture;
@@ -22,33 +22,38 @@ use log::info;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3, Vec4};
-use crate::assets::render_object::{Material, Mesh, MultiMeshModel, StdMaterial};
+use crate::assets::render_object::{Material, MaterialHandle, Mesh, StdMaterial};
 use crate::assets::Vertex;
 
 lazy_static! {
     static ref MISSING_TEXTURE_IMG: RgbaImage = missing_texture();
 }
 
-pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MultiMeshModel {
+pub type MeshesAndMaterials = (Vec<Mesh>, Vec<Material>, Vec<usize>);
+
+pub fn load_gltf(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, gltf_path: &Path) -> MeshesAndMaterials {
     let working_dir = gltf_path.parent().unwrap();
     let gltf = read_gltf_file(gltf_path);
     let sources_data = SourcesData::load_data_into_memory(&gltf, working_dir);
+    let materials: Vec<Material> = gltf.materials()
+        .map(|gltf_material| load_gltf_material(device, physical_device, command_pool, descriptor_manager, &sources_data, &gltf_material))
+        .collect();
     let mut meshes: Vec<Mesh> = Vec::new();
-    for mesh in gltf.meshes() {
-        for primitive in mesh.primitives() {
-            meshes.push(build_mesh_from_primitives(device, physical_device, command_pool, descriptor_manager, &sources_data, primitive, &mesh));
+    let mut mesh_material_indices: Vec<usize> = Vec::new();
+    for gltf_mesh in gltf.meshes() {
+        for primitive in gltf_mesh.primitives() {
+            mesh_material_indices.push(primitive.material().index().unwrap());
+            meshes.push(build_mesh_from_primitives(device, command_pool, &sources_data, primitive));
         }
     }
 
-    if let Some(scene) = gltf.scenes().nth(0) {
+    if let Some(scene) = gltf.scenes().next() {
         for scene_node in scene.nodes() {
             update_transforms(&mut meshes, &scene_node, Mat4::IDENTITY);
         }
     }
 
-    MultiMeshModel {
-        meshes
-    }
+    (meshes, materials, mesh_material_indices)
 }
 
 fn update_transforms(meshes: &mut Vec<Mesh>, node: &Node, parent_transform: Mat4) {
@@ -90,18 +95,44 @@ fn default_texture(device: ConstPtr<Device>, physical_device: &PhysicalDevice, c
     })
 }
 
-fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, primitive: Primitive, gltf_mesh: &gltf::mesh::Mesh) -> Mesh {
-    let material = primitive.material();
-    let base_color_texture = material.pbr_metallic_roughness().base_color_texture();
+fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, data_buffers: &SourcesData, gltf_material: &gltf::material::Material) -> Material {
+    let base_color_texture = gltf_material.pbr_metallic_roughness().base_color_texture();
     let base_color_tex_coord_index = base_color_texture.as_ref().map(|base_color_texture| base_color_texture.tex_coord());
+    assert_eq!(base_color_tex_coord_index.unwrap(), 0, "Currently only support loading gltf models with the attribute TEXCOORD_0");
+    let base_color = ColorRgbaF::new_from_array(gltf_material.pbr_metallic_roughness().base_color_factor());
 
+    let base_color_texture = base_color_texture.as_ref().map(|texture| {
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_SRGB)
+    }).unwrap_or_else(|| {
+        default_texture(device, physical_device, command_pool, descriptor_manager)
+    });
+
+    let normal_texture = gltf_material.normal_texture().map(|texture| {
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
+    }).unwrap_or_else(|| {
+        default_texture(device, physical_device, command_pool, descriptor_manager)
+    });
+
+    // TODO this assumes that occlusion always uses the R channel, metal B and roughness G. Metal and
+    // roughness are always together, but not necessarily occlusion
+    let occlusion_roughness_metallic_texture = gltf_material.pbr_metallic_roughness().metallic_roughness_texture().map(|texture| {
+        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
+    }).unwrap_or_else(|| {
+        default_texture(device, physical_device, command_pool, descriptor_manager)
+    });
+
+    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, normal_texture, occlusion_roughness_metallic_texture, base_color);
+    Material::Standard(material)
+}
+
+fn build_mesh_from_primitives(device: ConstPtr<Device>, command_pool: &CommandPool, data_buffers: &SourcesData, primitive: gltf::Primitive) -> Mesh {
     let primitive_attributes = PrimitiveAttributes::new(&primitive, data_buffers);
 
     let position_accessor: BufferAccessor<Vec3> = primitive_attributes.attribute_accessor(Semantic::Positions).unwrap();
     // TODO handle when no tangents exist on a model
     let tangent_accessor: BufferAccessor<[f32; 4]> = primitive_attributes.attribute_accessor(Semantic::Tangents).unwrap();
     let normal_accessor: BufferAccessor<Vec3> = primitive_attributes.attribute_accessor(Semantic::Normals).unwrap();
-    let base_color_tex_coord_accessor = base_color_tex_coord_index.and_then(|index| primitive_attributes.attribute_accessor::<Vec2>(Semantic::TexCoords(index)));
+    let base_color_tex_coord_accessor: BufferAccessor<Vec2> = primitive_attributes.attribute_accessor(Semantic::TexCoords(0)).unwrap();
 
     let vertices: Vec<Vertex> = (0..primitive_attributes.vertex_count)
         .map(|i| {
@@ -111,7 +142,7 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
             Vertex {
                 position,
                 normal,
-                texture_coord: base_color_tex_coord_accessor.as_ref().map_or(Vec2::ZERO, |accessor| accessor.data_at_index(i)),
+                texture_coord: base_color_tex_coord_accessor.data_at_index(i),
                 tangent: Vec4::new(tangent[0], tangent[1], tangent[2], tangent[3]),
             }
         })
@@ -125,27 +156,6 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         })
         .collect();
 
-
-    let base_color_texture = base_color_texture.as_ref().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_SRGB)
-    }).unwrap_or_else(|| {
-        default_texture(device, physical_device, command_pool, descriptor_manager)
-    });
-
-    let normal_texture = material.normal_texture().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
-    }).unwrap_or_else(|| {
-        default_texture(device, physical_device, command_pool, descriptor_manager)
-    });
-
-    // TODO this assumes that occlusion always uses the R channel, metal B and roughness G. Metal and
-    // roughness are always together, but not necessarily occlusion
-    let occlusion_roughness_metallic_texture = material.pbr_metallic_roughness().metallic_roughness_texture().map(|texture| {
-        load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
-    }).unwrap_or_else(|| {
-        default_texture(device, physical_device, command_pool, descriptor_manager)
-    });
-
     let buffer_data: &[u8] = bytemuck::cast_slice(vertices.as_slice());
     let vertex_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
         data: buffer_data,
@@ -157,16 +167,13 @@ fn build_mesh_from_primitives(device: ConstPtr<Device>, physical_device: &Physic
         data: index_buffer_data,
         usage: vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
     });
-    let base_color = ColorRgbaF::new_from_array(material.pbr_metallic_roughness().base_color_factor());
-    let material = StdMaterial::create(device, command_pool, descriptor_manager, base_color_texture, normal_texture, occlusion_roughness_metallic_texture, base_color);
 
     Mesh {
-        name: String::from(gltf_mesh.name().unwrap_or("defaultName")),
         vertex_buffer,
         index_buffer,
-        material: Material::Standard(material),
         index_count: indices.len() as u32,
         relative_transform: Mat4::IDENTITY,
+        material_handle: MaterialHandle::null(),
     }
 }
 
@@ -193,7 +200,7 @@ struct PrimitiveAttributes<'a> {
 }
 
 impl<'a> PrimitiveAttributes<'a> {
-    fn new(primitive: &Primitive<'a>, data_buffers: &'a SourcesData) -> Self {
+    fn new(primitive: &gltf::Primitive<'a>, data_buffers: &'a SourcesData) -> Self {
         let semantic_accessors: AHashMap<Semantic, Accessor<'a>> = primitive.attributes().map(|attribute| (attribute.0, attribute.1)).collect();
         let vertex_count = semantic_accessors.get(&Semantic::Positions).unwrap().count();
         let indices_accessor = match primitive.indices().unwrap().data_type() {

@@ -1,9 +1,7 @@
-use std::mem::swap;
 use std::path::Path;
+
 use ahash::AHashMap;
 use bevy_ecs::prelude::*;
-use image::load;
-use log::info;
 use winit::event::VirtualKeyCode;
 
 use crate::assets::{AssetHandle, shader_compiler};
@@ -12,7 +10,7 @@ use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline};
 use crate::rehnda_core::ConstPtr;
 use crate::rehnda_core::input::InputState;
 
-pub type MaterialHandle = AssetHandle<MaterialPipeline>;
+pub type MaterialPipelineHandle = AssetHandle<MaterialPipeline>;
 
 pub enum Shader {
     Default,
@@ -54,7 +52,7 @@ struct MaterialAsset {
 
 #[derive(Default, Resource)]
 pub struct MaterialServer {
-    materials: AHashMap<MaterialHandle, MaterialAsset>,
+    materials: AHashMap<MaterialPipelineHandle, MaterialAsset>,
 }
 
 impl MaterialServer {
@@ -66,8 +64,8 @@ impl MaterialServer {
         }
     }
 
-    pub fn load_material(&mut self, material_creation_function: fn(ConstPtr<Device>, &mut DescriptorManager, &GraphicsSettings, &Swapchain, &Path, &Path) -> MaterialPipeline, shader: Shader) -> MaterialHandle {
-        let material_handle = MaterialHandle::new(self.materials.len() as u32);
+    pub fn load_material(&mut self, material_creation_function: fn(ConstPtr<Device>, &mut DescriptorManager, &GraphicsSettings, &Swapchain, &Path, &Path) -> MaterialPipeline, shader: Shader) -> MaterialPipelineHandle {
+        let material_handle = MaterialPipelineHandle::new(self.materials.len() as u32);
         self.materials.insert(material_handle, MaterialAsset {
             materials: [None, None],
             current_material: 0,
@@ -78,7 +76,7 @@ impl MaterialServer {
         material_handle
     }
 
-    pub fn material_ref(&self, handle: &MaterialHandle) -> Option<&MaterialPipeline> {
+    pub fn material_ref(&self, handle: &MaterialPipelineHandle) -> Option<&MaterialPipeline> {
         self.materials.get(handle).and_then(|asset| asset.materials[asset.current_material].as_ref())
     }
 }

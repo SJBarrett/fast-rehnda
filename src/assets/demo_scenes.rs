@@ -17,6 +17,43 @@ pub struct Actor {
     pub transform: Mat4,
 }
 
+pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {
+    let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
+    camera.position = (1.5, -0.6, 9.7).into();
+    camera.yaw = -97.0;
+    commands.insert_resource(camera);
+
+    let pbr_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Pbr);
+    let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
+
+    commands.spawn((
+        RenderObject {
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("assets/models/Sphere/UvSphere.glb"), &mut descriptor_manager),
+            material_handle: pbr_material,
+        },
+        Actor {
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(1.0), Quat::from_euler(EulerRot::XYZ, 0.0, 60.0f32.to_radians(), 0.0), (0.0, -1.5, 0.0).into()),
+            name: "Cannon".into(),
+        }
+    ));
+    commands.spawn((
+        RenderObject {
+            relative_transform: Default::default(),
+            model_handle: asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager),
+            material_handle: unlit_material,
+        },
+        Actor {
+            transform: Mat4::from_scale_rotation_translation(Vec3::splat(6.0), Quat::IDENTITY, (2.0, 2.0, 2.0).into()),
+            name: "LightBulb".into(),
+        },
+        PointLight {
+            light_color: (1.0, 1.0, 1.0).into(),
+            emissivity: 100.0,
+        },
+    ));
+}
+
 pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {
     let mut camera = Camera::new(45.0, swapchain.aspect_ratio(), 0.1, 1000.0);
     camera.position = (1.5, -0.6, 9.7).into();

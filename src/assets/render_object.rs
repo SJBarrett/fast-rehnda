@@ -7,18 +7,18 @@ use bytemuck_derive::{Pod, Zeroable};
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Mat4};
-use crate::assets::{ModelHandle};
-use crate::assets::material_server::MaterialHandle;
+use crate::assets::{AssetHandle, ModelHandle};
+use crate::assets::material_server::MaterialPipelineHandle;
 
 #[derive(Component)]
 pub struct RenderObject {
     pub relative_transform: Mat4,
     pub model_handle: ModelHandle,
-    pub material_handle: MaterialHandle,
+    pub material_handle: MaterialPipelineHandle,
 }
 
 impl RenderObject {
-    pub fn new_with_transform(model_handle: ModelHandle, material_handle: MaterialHandle) -> RenderObject {
+    pub fn new_with_transform(model_handle: ModelHandle, material_handle: MaterialPipelineHandle) -> RenderObject {
         RenderObject {
             relative_transform: Mat4::IDENTITY,
             model_handle,
@@ -40,13 +40,14 @@ impl MultiMeshModel {
 }
 
 pub struct Mesh {
-    pub name: String,
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub material: Material,
     pub index_count: u32,
     pub relative_transform: Mat4,
+    pub material_handle: MaterialHandle,
 }
+
+pub type MaterialHandle = AssetHandle<Material>;
 
 pub enum Material {
     Standard(StdMaterial),

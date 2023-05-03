@@ -56,7 +56,7 @@ impl EcsEngine {
         app.init_resource::<MaterialServer>();
         app.add_event::<winit::event::KeyboardInput>();
         app.add_startup_system(material_server::material_startup_system);
-        app.add_startup_system(demo_scenes::shader_development_scene);
+        app.add_startup_system(demo_scenes::spheres_scene);
         app.add_systems((
             input_systems::input_system.in_set(RehndaSet::PreUpdate),
         ));

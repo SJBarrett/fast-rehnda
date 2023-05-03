@@ -11,8 +11,8 @@ use crate::rehnda_core::{ConstPtr, Mat4};
 use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
 use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
-use crate::assets::material_server::{MaterialHandle, MaterialServer};
-use crate::assets::render_object::{Material, Mesh, RenderObject};
+use crate::assets::material_server::{MaterialPipelineHandle, MaterialServer};
+use crate::assets::render_object::{Material, MaterialHandle, Mesh, RenderObject};
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -70,34 +70,43 @@ pub fn draw_system(
         .expect("Failed to being recording command buffer");
 
     cmd_begin_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
+    let mut last_material_pipeline_handle = MaterialPipelineHandle::null();
+    let mut last_material_pipeline: Option<&MaterialPipeline> = None;
     let mut last_material_handle = MaterialHandle::null();
-    let mut last_material: Option<&MaterialPipeline> = None;
+    let mut last_material: Option<&Material> = None;
     let mut last_mesh_handle = MeshHandle::null();
     let mut last_mesh: Option<&Mesh> = None;
     for (actor, object) in query.iter() {
-        let is_different_material = last_material_handle.is_null() || last_material_handle != object.material_handle;
+        let is_different_material = last_material_pipeline_handle.is_null() || last_material_pipeline_handle != object.material_handle;
         if let Some(loaded_material) = material_server.material_ref(&object.material_handle) {
             if is_different_material {
-                last_material = Some(loaded_material);
-                bind_material(&frame_renderer.device, &swapchain, loaded_material, frame_data);
+                last_material_pipeline = Some(loaded_material);
+                bind_material_pipeline(&frame_renderer.device, &swapchain, loaded_material, frame_data);
             }
         } else {
             continue;
         }
 
-        let current_material = unsafe { last_material.unwrap_unchecked() };
+        let current_material = unsafe { last_material_pipeline.unwrap_unchecked() };
 
         for &mesh_handle in asset_manager.meshes_ref(&object.model_handle) {
             // new model so bind model specific resources
             if last_mesh_handle.is_null() || last_mesh_handle != mesh_handle {
                 let mesh = asset_manager.mesh_ref(&mesh_handle);
                 last_mesh = Some(mesh);
-                bind_model(&frame_renderer.device, frame_data, current_material, mesh, &lights);
+                bind_model(&frame_renderer.device, frame_data, mesh);
+            }
+            let mesh_material_handle = last_mesh.unwrap().material_handle;
+            // new material so bind material specific resources
+            if last_material_handle.is_null() || last_material_handle != mesh_material_handle {
+                let material = asset_manager.material_ref(&mesh_material_handle);
+                last_material = Some(material);
+                bind_material(&frame_renderer.device, frame_data, current_material, material, &lights);
             }
 
             let current_model = unsafe { last_mesh.unwrap_unchecked() };
             draw_object(&frame_renderer.device, frame_data, current_material, current_model, actor.transform);
-            last_material_handle = object.material_handle;
+            last_material_pipeline_handle = object.material_handle;
             last_mesh_handle = mesh_handle;
         }
     }
@@ -154,7 +163,7 @@ fn prepare_to_draw(device: &Device, swapchain: &Swapchain, frame_data: &FrameDat
     Ok(image_index)
 }
 
-fn bind_material(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipeline, frame_data: &FrameData) {
+fn bind_material_pipeline(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipeline, frame_data: &FrameData) {
     unsafe { device.cmd_bind_pipeline(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline()); }
     let viewport = [vk::Viewport::builder()
         .x(0.0)
@@ -173,20 +182,27 @@ fn bind_material(device: &Device, swapchain: &Swapchain, pipeline: &MaterialPipe
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
 }
 
-fn bind_model(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, mesh: &Mesh, light_data: &LightingDataManager) {
+fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &Material, light_data: &LightingDataManager) {
+    match material {
+        Material::Standard(std_material) => {
+            unsafe {
+                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set, light_data.descriptor_set], &[]);
+            }
+        }
+        _ => {
+            unsafe {
+                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
+            }
+        }
+    }
+}
+
+fn bind_model(device: &Device, frame_data: &FrameData, mesh: &Mesh) {
     let buffers = &[mesh.vertex_buffer.buffer];
     let offsets = &[0u64];
     unsafe {
         device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, buffers, offsets);
         device.cmd_bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer, 0, vk::IndexType::UINT32);
-        match &mesh.material {
-            Material::Standard(std_material) => {
-                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, std_material.descriptor_set, light_data.descriptor_set], &[]);
-            }
-            _ => {
-                device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor], &[]);
-            }
-        }
     }
 }
 
