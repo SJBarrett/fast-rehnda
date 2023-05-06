@@ -36,7 +36,7 @@ impl Vertex {
                 .binding(0)
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(offset_of!(Vertex, position) as u32)
+                .offset(offset_of!(Vertex, normal) as u32)
                 .build(),
             // texture coord attribute
             vk::VertexInputAttributeDescription::builder()

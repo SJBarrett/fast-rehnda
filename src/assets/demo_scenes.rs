@@ -93,7 +93,7 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
         },
         Transform {
             translation: (0.0, -1.5, 0.0).into(),
-            rotation: Quat::from_euler(EulerRot::XYZ, 0.0, 60.0f32.to_radians(), 0.0),
+            rotation: Quat::from_euler(EulerRot::XYZ, 0.0, 0.0, 0.0),
             scale: Vec3::splat(10.0),
         },
         ShouldDrawDebug,
