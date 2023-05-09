@@ -2,7 +2,7 @@ use ash::vk;
 use ash::vk::Extent2D;
 
 use crate::rehnda_core::ConstPtr;
-use crate::etna::{CommandPool, Device, Image, ImageCreateInfo, PhysicalDevice};
+use crate::etna::{CommandPool, Device, Image, ImageCreateInfo, ImageType, PhysicalDevice};
 use crate::etna::image_transitions::{transition_image_layout, TransitionProps};
 
 pub struct DepthBuffer {
@@ -21,6 +21,7 @@ impl DepthBuffer {
         let depth_format = physical_device.find_supported_format(&candidate_formats, vk::ImageTiling::OPTIMAL, vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
             .expect("Failed to find supported format for depth buffer");
         let image = Image::create_image(device, &ImageCreateInfo {
+            image_type: ImageType::SingleImage,
             width: extent.width,
             height: extent.height,
             mip_levels: 1,
@@ -30,6 +31,7 @@ impl DepthBuffer {
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
             image_aspect_flags: vk::ImageAspectFlags::DEPTH,
             num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
+            create_flags: vk::ImageCreateFlags::empty(),
         });
 
         let one_time_command_buffer = command_pool.one_time_command_buffer();
@@ -47,6 +49,7 @@ impl DepthBuffer {
             },
             base_mip_level: 0,
             level_count: 1,
+            layer_count: 1,
         });
 
         DepthBuffer {

@@ -4,11 +4,12 @@ use std::mem::size_of;
 use ash::vk;
 use bevy_ecs::prelude::*;
 use bevy_hierarchy::Children;
+use gltf::json::Asset;
 
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, ModelPushConstants};
 use crate::rehnda_core::{ConstPtr, Mat4};
-use crate::assets::{AssetManager, Camera, MeshHandle, ViewProjectionMatrices};
+use crate::assets::{AssetManager, Camera, cube, MeshHandle, ViewProjectionMatrices};
 use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialPipelineHandle, MaterialServer};
@@ -71,6 +72,7 @@ pub fn draw_system(
         .expect("Failed to being recording command buffer");
 
     cmd_begin_rendering(&frame_renderer.device, &swapchain, frame_data.command_buffer, image_index);
+    draw_sky_box(&frame_renderer.device, &swapchain, frame_data, &asset_manager, &material_server);
     let mut last_material_pipeline_handle = MaterialPipelineHandle::null();
     let mut last_material_pipeline: Option<&MaterialPipeline> = None;
     let mut last_material_handle = MaterialHandle::null();
@@ -130,6 +132,19 @@ pub fn draw_system(
     };
 
     frame_renderer.current_frame += 1;
+}
+
+fn draw_sky_box(device: &Device, swapchain: &Swapchain, frame_data: &FrameData, asset_manager: &AssetManager, material_server: &MaterialServer) {
+    if let Some((light_map_texture, pipeline_handle)) = &asset_manager.global_light_map {
+        let pipeline = &material_server.material_ref(pipeline_handle).unwrap();
+
+        bind_material_pipeline(device, swapchain, pipeline, frame_data);
+        unsafe {
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, light_map_texture.descriptor_set], &[]);
+            device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, std::slice::from_ref(&asset_manager.cube_map_manager.cube_vertex_buffer.buffer), std::slice::from_ref(&0u64));
+            device.cmd_draw(frame_data.command_buffer, cube::CUBE_VERTICES.len() as u32, 1, 0, 0);
+        }
+    }
 }
 
 fn update_global_buffer(frame_data: &FrameData, camera: &Camera) {
@@ -228,6 +243,7 @@ fn cmd_begin_rendering(device: &Device, swapchain: &Swapchain, command_buffer: v
         aspect_mask: vk::ImageAspectFlags::COLOR,
         base_mip_level: 0,
         level_count: 1,
+        layer_count: 1,
     });
     let clear_color = vk::ClearValue {
         color: vk::ClearColorValue {
@@ -288,6 +304,7 @@ fn cmd_end_rendering(device: &Device, swapchain: &Swapchain, command_buffer: vk:
         aspect_mask: vk::ImageAspectFlags::COLOR,
         base_mip_level: 0,
         level_count: 1,
+        layer_count: 1,
     });
 }
 

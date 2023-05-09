@@ -36,6 +36,12 @@ const OPENGL_TO_VULKAN_MATRIX: Mat4 = Mat4::from_cols_array(&[
     0.0, 0.0, 0.5, 1.0,
 ]);
 
+pub fn vulkan_projection_matrix(fov_y: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> Mat4 {
+    let mut projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh_gl(fov_y, aspect_ratio, z_near, z_far);
+    projection.y_axis[1] *= -1.0;
+    projection
+}
+
 impl Camera {
     pub fn new(fov_y_degrees: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> Camera {
         let mut projection = Mat4::perspective_rh_gl(fov_y_degrees.to_radians(), aspect_ratio, z_near, z_far);
@@ -55,8 +61,7 @@ impl Camera {
     }
 
     pub fn update_aspect_ratio(&mut self, aspect_ratio: f32) {
-        self.projection = OPENGL_TO_VULKAN_MATRIX * Mat4::perspective_rh_gl(self.fov_y, aspect_ratio, self.z_near, self.z_far);
-        self.projection.y_axis[1] *= -1.0;
+        self.projection = vulkan_projection_matrix(self.fov_y, aspect_ratio, self.z_near, self.z_far);
     }
 
     pub fn to_view_proj(&self) -> ViewProjectionMatrices {

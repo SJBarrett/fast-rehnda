@@ -18,6 +18,7 @@ pub enum Shader {
     Unlit,
     Pbr,
     BlinnPhong,
+    SkyBox,
 }
 
 impl Shader {
@@ -37,6 +38,9 @@ impl Shader {
             }
             Shader::BlinnPhong => {
                 ("shaders/spirv/shader.vert_spv", "shaders/spirv/blinnphong.frag_spv")
+            }
+            Shader::SkyBox => {
+                ("shaders/spirv/skybox.vert_spv", "shaders/spirv/skybox.frag_spv")
             }
         }
     }

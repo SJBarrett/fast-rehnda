@@ -4,7 +4,7 @@ use bevy_ecs::prelude::*;
 use log::debug;
 
 use crate::etna;
-use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, PhysicalDevice, QueueFamilyIndices, Surface};
+use crate::etna::{ChosenSwapchainProps, CommandPool, DepthBuffer, Image, ImageCreateInfo, ImageType, PhysicalDevice, QueueFamilyIndices, Surface};
 use crate::rehnda_core::ConstPtr;
 
 #[derive(Resource)]
@@ -190,6 +190,7 @@ impl Drop for Swapchain {
 
 fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, extent: vk::Extent2D, format: vk::Format) -> ImageCreateInfo {
     ImageCreateInfo {
+        image_type: ImageType::SingleImage,
         width: extent.width,
         height: extent.height,
         format,
@@ -199,6 +200,7 @@ fn multisampling_color_image_create_info(physical_device: &PhysicalDevice, exten
         memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
         image_aspect_flags: vk::ImageAspectFlags::COLOR,
         num_samples: physical_device.graphics_settings.msaa_samples.to_sample_count_flags(),
+        create_flags: vk::ImageCreateFlags::empty(),
     }
 }
 

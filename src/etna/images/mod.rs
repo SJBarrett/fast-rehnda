@@ -4,3 +4,4 @@ mod depth_buffer;
 pub use depth_buffer::*;
 mod texture;
 pub use texture::*;
+pub mod cube_map;

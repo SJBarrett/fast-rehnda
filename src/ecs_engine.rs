@@ -17,6 +17,7 @@ use crate::assets::{AssetManager, camera_input_system, light_source, material_se
 use crate::assets::demo_scenes;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::MaterialServer;
+use crate::assets::shader_compiler::compile_all_files;
 use crate::ui::{EguiOutput, ui_builder_system, UiPainter};
 
 pub struct EcsEngine {
@@ -49,6 +50,7 @@ enum RehndaSet {
 
 impl EcsEngine {
     pub fn new(window: Window, event_loop: &EventLoopWindowTarget<()>) -> EcsEngine {
+        compile_all_files();
         let mut app = App::new();
         app.add_plugin(TimePlugin::default());
         Self::initialise_rendering_resources(&mut app, window, event_loop);
@@ -56,7 +58,7 @@ impl EcsEngine {
         app.init_resource::<MaterialServer>();
         app.add_event::<winit::event::KeyboardInput>();
         app.add_startup_system(material_server::material_startup_system);
-        app.add_startup_system(demo_scenes::shader_development_scene);
+        app.add_startup_system(demo_scenes::spheres_scene);
         app.add_systems((
             input_systems::input_system.in_set(RehndaSet::PreUpdate),
         ));
@@ -99,7 +101,7 @@ impl EcsEngine {
             surface.query_best_swapchain_creation_details(window.inner_size(), physical_device.handle()),
         );
         let mut descriptor_manager = DescriptorManager::create(device.ptr());
-        let asset_manager = AssetManager::create(device.ptr(), physical_device.ptr(), CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family));
+        let asset_manager = AssetManager::create(device.ptr(), physical_device.ptr(), &mut descriptor_manager, CommandPool::create(device.ptr(), physical_device.queue_families().graphics_family));
         let frame_renderer = FrameRenderContext::create(device.ptr(), &command_pool, &mut descriptor_manager);
 
         // ui resources

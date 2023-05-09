@@ -16,6 +16,7 @@ pub mod image_transitions {
         pub aspect_mask: vk::ImageAspectFlags,
         pub base_mip_level: u32,
         pub level_count: u32,
+        pub layer_count: u32,
     }
 
     impl TransitionProps {
@@ -30,6 +31,7 @@ pub mod image_transitions {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 level_count: mip_levels,
                 base_mip_level: 0,
+                layer_count: 1,
             }
         }
     }
@@ -48,7 +50,7 @@ pub mod image_transitions {
                 .base_mip_level(transition.base_mip_level)
                 .level_count(transition.level_count)
                 .base_array_layer(0)
-                .layer_count(1)
+                .layer_count(transition.layer_count)
                 .build()
             );
         let dep_info = vk::DependencyInfo::builder()

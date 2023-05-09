@@ -4,12 +4,13 @@ use std::path::Path;
 use ahash::AHashMap;
 use bevy_ecs::system::Resource;
 
-use crate::etna::{CommandPool, Device, PhysicalDevice};
+use crate::etna::{CommandPool, Device, Image, PhysicalDevice};
 use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::material_server::MaterialPipelineHandle;
 use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, PbrMaterialUniforms, RenderObject};
+use crate::etna::cube_map::{CubeMap, CubeMapManager, CubeMapTexture};
 
 pub struct LoadedGltfMesh {
     pub mesh_handle: MeshHandle,
@@ -23,17 +24,27 @@ pub struct AssetManager {
     resource_command_pool: CommandPool,
     meshes: AHashMap<MeshHandle, Mesh>,
     materials: AHashMap<MaterialHandle, PbrMaterial>,
+    pub cube_map_manager: CubeMapManager,
+    pub global_light_map: Option<(CubeMapTexture, MaterialPipelineHandle)>,
 }
 
 impl AssetManager {
-    pub fn create(device: ConstPtr<Device>, physical_device: ConstPtr<PhysicalDevice>, resource_command_pool: CommandPool) -> Self {
+    pub fn create(device: ConstPtr<Device>, physical_device: ConstPtr<PhysicalDevice>, descriptor_manager: &mut DescriptorManager, resource_command_pool: CommandPool) -> Self {
+        let cube_map_manager = CubeMapManager::create(device, descriptor_manager, &resource_command_pool);
         AssetManager {
             device,
             physical_device,
             resource_command_pool,
             meshes: AHashMap::new(),
             materials: AHashMap::new(),
+            cube_map_manager,
+            global_light_map: None,
         }
+    }
+
+    pub fn load_global_light_map(&mut self, light_map_path: &Path, descriptor_manager: &mut DescriptorManager, pipeline: MaterialPipelineHandle) {
+        let img = self.cube_map_manager.create_cube_image(&self.physical_device, &self.resource_command_pool, descriptor_manager, light_map_path);
+        self.global_light_map = Some((CubeMapTexture::create(self.device, img, descriptor_manager), pipeline));
     }
 
     pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager, pipeline: MaterialPipelineHandle) -> Vec<RenderObject> {

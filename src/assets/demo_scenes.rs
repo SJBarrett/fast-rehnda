@@ -8,10 +8,11 @@ use glam::{EulerRot, Quat};
 use crate::etna::{material_pipeline, Swapchain};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, Vec3};
-use crate::assets::{AssetManager, Camera};
+use crate::assets::{AssetManager, Camera, skybox};
 use crate::assets::light_source::PointLight;
 use crate::assets::material_server::{MaterialServer, Shader};
 use crate::assets::render_object::{PbrMaterialUniforms, RenderObject, Transform};
+use crate::assets::skybox::SkyBox;
 
 #[derive(Component)]
 pub struct Actor {
@@ -29,7 +30,9 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
 
     let pbr_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Pbr);
     let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
+    let skybox_material = material_server.load_material(skybox::skybox_pipeline, Shader::SkyBox);
     let sphere_model = asset_manager.load_gltf(Path::new("assets/models/Sphere/UvSphere.glb"), &mut descriptor_manager, pbr_material)[0];
+    asset_manager.load_global_light_map(Path::new("assets/drakensberg_solitary_mountain_8k.hdr"), &mut descriptor_manager, skybox_material);
 
     for x_index in 0..5 {
         for y_index in 0..2 {
@@ -73,6 +76,11 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
         ShouldDrawDebug,
     ));
     add_model_to_parent(light_bulb_entity, light_bulb_model.as_slice());
+
+    // commands.spawn(SkyBox {
+    //     pipeline: skybox_material,
+    //     descriptor_set: ,
+    // })
 }
 
 pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asset_manager: ResMut<AssetManager>, mut material_server: ResMut<MaterialServer>, mut descriptor_manager: ResMut<DescriptorManager>) {
@@ -84,7 +92,7 @@ pub fn shader_development_scene(mut commands: Commands, swapchain: Res<Swapchain
     let pbr_pipeline = material_server.load_material(material_pipeline::textured_pipeline, Shader::Pbr);
     let unlit_material = material_server.load_material(material_pipeline::textured_pipeline, Shader::Unlit);
 
-    let cannon_model = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager, pbr_pipeline);
+    let cannon_model = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf"), &mut descriptor_manager, pbr_pipeline);
     let light_bulb_model = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager, unlit_material);
 
     let cannon_entity = commands.spawn((

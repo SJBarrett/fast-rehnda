@@ -5,7 +5,8 @@ use image::EncodableLayout;
 
 use crate::rehnda_core::ConstPtr;
 use crate::etna;
-use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Image, image_transitions, ImageCreateInfo, PhysicalDevice};
+use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Image, image_transitions, ImageCreateInfo, ImageType, PhysicalDevice};
+use crate::etna::image_transitions::TransitionProps;
 use crate::etna::material_pipeline::DescriptorManager;
 
 pub struct Texture {
@@ -31,7 +32,86 @@ pub struct TextureCreateInfo<'a> {
     pub sampler_info: SamplerOptions<'a>,
 }
 
+pub struct FramebufferCreateInfo<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub format: vk::Format,
+    pub usage: vk::ImageUsageFlags,
+    pub mip_levels: Option<u32>,
+    pub sampler_info: SamplerOptions<'a>,
+}
+
 impl Texture {
+    pub fn create_framebuffer(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, create_info: &FramebufferCreateInfo) -> Self {
+        let command_buffer = command_pool.one_time_command_buffer();
+        let mip_levels = create_info.mip_levels.unwrap_or(1);
+
+        let image = Image::create_image(device, &ImageCreateInfo {
+            image_type: ImageType::SingleImage,
+            width: create_info.width,
+            height: create_info.height,
+            mip_levels,
+            format: create_info.format,
+            tiling: vk::ImageTiling::OPTIMAL,
+            usage: create_info.usage,
+            memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            image_aspect_flags: vk::ImageAspectFlags::COLOR,
+            num_samples: vk::SampleCountFlags::TYPE_1,
+            create_flags: vk::ImageCreateFlags::empty(),
+        });
+
+        image_transitions::transition_image_layout(&device, &command_buffer, image.vk_image, &TransitionProps {
+            old_layout: vk::ImageLayout::UNDEFINED,
+            new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            src_stage_mask: vk::PipelineStageFlags2::TOP_OF_PIPE,
+            dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+            src_access_mask: vk::AccessFlags2::empty(),
+            dst_access_mask: vk::AccessFlags2::SHADER_WRITE,
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            layer_count: 1,
+        });
+
+        let sampler_create_info = match create_info.sampler_info {
+            SamplerOptions::FilterOptions(filter_options) => {
+                vk::SamplerCreateInfo::builder()
+                    .mag_filter(filter_options.mag_filter.unwrap_or(vk::Filter::LINEAR))
+                    .min_filter(filter_options.min_filter.unwrap_or(vk::Filter::LINEAR))
+                    .address_mode_u(filter_options.address_mode_u)
+                    .address_mode_v(filter_options.address_mode_v)
+                    .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                    // only use anisotropy if the feature is enabled
+                    .anisotropy_enable(device.enabled_features.sampler_anisotropy == vk::TRUE)
+                    .max_anisotropy(if device.enabled_features.sampler_anisotropy == vk::TRUE {
+                        physical_device.device_properties.limits.max_sampler_anisotropy
+                    } else {
+                        1.0
+                    })
+                    .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                    .unnormalized_coordinates(false)
+                    .compare_enable(false)
+                    .compare_op(vk::CompareOp::ALWAYS)
+                    .mipmap_mode(filter_options.mip_map_mode.unwrap_or(vk::SamplerMipmapMode::LINEAR))
+                    .min_lod(0.0)
+                    .max_lod(mip_levels as f32)
+                    .mip_lod_bias(0.0)
+                    .build()
+            },
+            SamplerOptions::CreateInfo(create_info) => create_info
+        };
+
+        let sampler = unsafe { device.create_sampler(&sampler_create_info, None) }
+            .expect("Failed to create sampler for Texture");
+
+        drop(command_buffer);
+        Texture {
+            device,
+            image,
+            sampler,
+        }
+    }
+
     pub fn create_from_image_file(device: ConstPtr<Device>, physical_device: &PhysicalDevice, command_pool: &CommandPool, image_path: &Path, descriptor_manager: &mut DescriptorManager) -> Texture {
         let img = image::open(image_path).expect("Failed to open image");
         let rgba_img = img.to_rgba8();
@@ -60,6 +140,7 @@ impl Texture {
             usage: vk::BufferUsageFlags::TRANSFER_SRC,
         });
         let image = Image::create_image(device, &ImageCreateInfo {
+            image_type: ImageType::SingleImage,
             width: create_info.width,
             height: create_info.height,
             mip_levels,
@@ -69,6 +150,7 @@ impl Texture {
             memory_properties: vk::MemoryPropertyFlags::DEVICE_LOCAL,
             image_aspect_flags: vk::ImageAspectFlags::COLOR,
             num_samples: vk::SampleCountFlags::TYPE_1,
+            create_flags: vk::ImageCreateFlags::empty(),
         });
 
         image_transitions::transition_image_layout(&device, &command_buffer, image.vk_image, &image_transitions::TransitionProps::undefined_to_transfer_dst(mip_levels));
@@ -159,6 +241,7 @@ impl Texture {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: i - 1,
                 level_count: 1,
+                layer_count: 1,
             });
 
             let image_blit = vk::ImageBlit::builder()
@@ -206,6 +289,7 @@ impl Texture {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 base_mip_level: i - 1,
                 level_count: 1,
+                layer_count: 1,
             });
 
             if mip_width > 1 {
@@ -226,6 +310,7 @@ impl Texture {
             aspect_mask: vk::ImageAspectFlags::COLOR,
             base_mip_level: mip_levels - 1,
             level_count: 1,
+            layer_count: 1,
         });
     }
 }
