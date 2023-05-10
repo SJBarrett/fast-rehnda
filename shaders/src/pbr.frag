@@ -39,6 +39,7 @@ float distribution_ggx(vec3 normal, vec3 half_vector, float a);
 float geometry_schlick_ggx(float normal_dot_view, float k);
 float geometry_smith(vec3 normal, vec3 view_direction, vec3 light_direction, float k);
 vec3 fresnel_schlick(float cos_theta, vec3 f0);
+vec3 fresnel_schlick_with_roughness(float cos_theta, vec3 f0, float roughness);
 
 void main() {
     float occlusion = 1;
@@ -91,7 +92,7 @@ void main() {
     // ------------------------ end per light calculations ------------------------
 
     // ambient lighting
-    vec3 k_specular = fresnel_schlick(max(dot(normal, view_direction), 0.0), f0);
+    vec3 k_specular = fresnel_schlick_with_roughness(max(dot(normal, view_direction), 0.0), f0, roughness);
     vec3 k_diffuse = 1.0 - k_specular;
     k_diffuse *= 1.0 - metallic;
     vec3 irradiance = texture(irradiance_map, normal).rgb;
@@ -141,4 +142,10 @@ float geometry_smith(vec3 normal, vec3 view_direction, vec3 light_direction, flo
 vec3 fresnel_schlick(float cos_theta, vec3 f0)
 {
     return f0 + (1.0 - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// use the roughness for ambient lighting where there is not half vector for simulating the micro facet model
+vec3 fresnel_schlick_with_roughness(float cos_theta, vec3 f0, float roughness)
+{
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
