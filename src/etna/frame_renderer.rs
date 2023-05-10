@@ -14,6 +14,7 @@ use crate::assets::demo_scenes::Actor;
 use crate::assets::light_source::LightingDataManager;
 use crate::assets::material_server::{MaterialPipelineHandle, MaterialServer};
 use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, RenderObject, Transform};
+use crate::etna::cube_map::EnvironmentMaps;
 use crate::ui::{EguiOutput, UiPainter};
 
 const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -106,7 +107,7 @@ pub fn draw_system(
                 if last_material_handle.is_null() || last_material_handle != mesh_material_handle {
                     let material = asset_manager.material_ref(&mesh_material_handle);
                     last_material_handle = mesh_material_handle;
-                    bind_material(&frame_renderer.device, frame_data, current_material, material, &lights);
+                    bind_material(&frame_renderer.device, frame_data, current_material, material, &lights, &asset_manager.global_light_map.as_ref().unwrap().0);
                 }
 
                 let current_model = unsafe { last_mesh.unwrap_unchecked() };
@@ -135,12 +136,12 @@ pub fn draw_system(
 }
 
 fn draw_sky_box(device: &Device, swapchain: &Swapchain, frame_data: &FrameData, asset_manager: &AssetManager, material_server: &MaterialServer) {
-    if let Some((light_map_texture, pipeline_handle)) = &asset_manager.global_light_map {
+    if let Some((environment_maps, pipeline_handle)) = &asset_manager.global_light_map {
         let pipeline = &material_server.material_ref(pipeline_handle).unwrap();
 
         bind_material_pipeline(device, swapchain, pipeline, frame_data);
         unsafe {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, light_map_texture.descriptor_set], &[]);
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, environment_maps.sky_box_texture.descriptor_set], &[]);
             device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, std::slice::from_ref(&asset_manager.cube_map_manager.cube_vertex_buffer.buffer), std::slice::from_ref(&0u64));
             device.cmd_draw(frame_data.command_buffer, cube::CUBE_VERTICES.len() as u32, 1, 0, 0);
         }
@@ -202,9 +203,9 @@ fn bind_material_pipeline(device: &Device, swapchain: &Swapchain, pipeline: &Mat
     unsafe { device.cmd_set_scissor(frame_data.command_buffer, 0, &scissor); }
 }
 
-fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &PbrMaterial, light_data: &LightingDataManager) {
+fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &PbrMaterial, light_data: &LightingDataManager, environment_maps: &EnvironmentMaps) {
     unsafe {
-        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set(), light_data.descriptor_set], &[]);
+        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set(), light_data.descriptor_set, environment_maps.irradiance_map_texture.descriptor_set], &[]);
     }
 }
 

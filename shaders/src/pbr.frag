@@ -23,6 +23,8 @@ layout(set = 2, binding = 0) uniform PointLight {
     float emissivity;
 } point_light;
 
+layout(set = 3, binding = 0) uniform samplerCube irradiance_map;
+
 layout(location = 0) in VS_OUT {
     vec3 position;
     vec2 tex_coord;
@@ -62,32 +64,40 @@ void main() {
     vec3 accumulated_lighting = vec3(0.0);
 
     // ------------------------ start per light calculations ------------------------
-    vec3 light_direction = normalize(point_light.position - vs_out.position);
-    float normal_dot_light = max(dot(normal, light_direction), 0.0);
-    float normal_dot_view = max(dot(normal, view_direction), 0.0);
-    vec3 half_vector = normalize(view_direction + light_direction);
-    float light_distance = length(point_light.position - vs_out.position);
-    float attenuation = point_light.emissivity / (light_distance * light_distance);
-    vec3 radiance = point_light.color * attenuation;
+    {
+        vec3 light_direction = normalize(point_light.position - vs_out.position);
+        float normal_dot_light = max(dot(normal, light_direction), 0.0);
+        float normal_dot_view = max(dot(normal, view_direction), 0.0);
+        vec3 half_vector = normalize(view_direction + light_direction);
+        float light_distance = length(point_light.position - vs_out.position);
+        float attenuation = point_light.emissivity / (light_distance * light_distance);
+        vec3 radiance = point_light.color * attenuation;
 
-    // cook-torrance brdf
-    float normal_distribution_function = distribution_ggx(normal, half_vector, roughness);
-    float geometry = geometry_smith(normal, view_direction, light_direction, roughness);
-    vec3 fresnel = fresnel_schlick(max(dot(half_vector, view_direction), 0.0), f0);
+        // cook-torrance brdf
+        float normal_distribution_function = distribution_ggx(normal, half_vector, roughness);
+        float geometry = geometry_smith(normal, view_direction, light_direction, roughness);
+        vec3 fresnel = fresnel_schlick(max(dot(half_vector, view_direction), 0.0), f0);
 
-    vec3 numerator = normal_distribution_function * geometry * fresnel;
-    float denominator = 4.0 * normal_dot_view * normal_dot_light + 0.0001;
-    vec3 specular = numerator / denominator;
+        vec3 numerator = normal_distribution_function * geometry * fresnel;
+        float denominator = 4.0 * normal_dot_view * normal_dot_light + 0.0001;
+        vec3 specular = numerator / denominator;
 
-    vec3 k_specular = fresnel;
-    vec3 k_diffuse = vec3(1.0) - k_specular;
-    k_diffuse *= 1.0 - metallic;
-
-    accumulated_lighting += (k_diffuse * albedo / PI + specular) * radiance * normal_dot_light;
+        vec3 k_specular = fresnel;
+        vec3 k_diffuse = vec3(1.0) - k_specular;
+        k_diffuse *= 1.0 - metallic;
+        accumulated_lighting += (k_diffuse * albedo / PI + specular) * radiance * normal_dot_light;
+    }
 
     // ------------------------ end per light calculations ------------------------
 
-    vec3 ambient = vec3(0.03) * albedo * occlusion;
+    // ambient lighting
+    vec3 k_specular = fresnel_schlick(max(dot(normal, view_direction), 0.0), f0);
+    vec3 k_diffuse = 1.0 - k_specular;
+    k_diffuse *= 1.0 - metallic;
+    vec3 irradiance = texture(irradiance_map, normal).rgb;
+    vec3 diffuse = irradiance * albedo;
+    vec3 ambient = (k_diffuse * diffuse) * occlusion;
+
     vec3 color = ambient + accumulated_lighting;
 
     // reinhard tone map

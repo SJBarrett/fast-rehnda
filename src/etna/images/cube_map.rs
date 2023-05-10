@@ -3,12 +3,12 @@ use std::mem::size_of;
 use std::ops::Deref;
 use std::path::Path;
 use ash::vk;
-use ash::vk::{DescriptorSet, Extent2D};
+use ash::vk::{CommandBuffer, DescriptorSet, Extent2D, ImageView};
 use bytemuck_derive::{Pod, Zeroable};
 use image::{EncodableLayout};
 use lazy_static::lazy_static;
 use crate::assets::{cube, vulkan_projection_matrix};
-use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, FramebufferCreateInfo, GraphicsSettings, Image, image_transitions, ImageCreateInfo, ImageType, MsaaSamples, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
+use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, FramebufferCreateInfo, GraphicsSettings, Image, image_transitions, ImageCreateInfo, ImageType, MsaaSamples, OneTimeCommandBuffer, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::image_transitions::{transition_image_layout, TransitionProps};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
@@ -74,17 +74,29 @@ impl CubeMapTexture {
 pub struct CubeMapManager {
     device: ConstPtr<Device>,
     pub cube_map_pipeline: MaterialPipeline,
+    pub diffuse_map_pipeline: MaterialPipeline,
     pub cube_vertex_buffer: Buffer,
+}
+
+const HDR_CUBE_MAP_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
+const SKY_BOX_RESOLUTION: u32 = 4096;
+const DIFFUSE_MAP_RESOLUTION: u32 = 256;
+
+pub struct EnvironmentMaps {
+    pub sky_box_texture: CubeMapTexture,
+    pub irradiance_map_texture: CubeMapTexture,
 }
 
 impl CubeMapManager {
     pub fn create(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, command_pool: &CommandPool) -> Self {
+        let settings = GraphicsSettings {
+            msaa_samples: MsaaSamples::X1,
+            sample_rate_shading_enabled: false,
+        };
         Self {
             device,
-            cube_map_pipeline: cube_map_pipeline(device, descriptor_manager, &GraphicsSettings {
-                msaa_samples: MsaaSamples::X1,
-                sample_rate_shading_enabled: false,
-            }),
+            cube_map_pipeline: cube_map_pipeline(device, descriptor_manager, &settings, Path::new("shaders/spirv/cubemap.frag_spv")),
+            diffuse_map_pipeline: cube_map_pipeline(device, descriptor_manager, &settings, Path::new("shaders/spirv/diffuse_map.frag_spv")),
             cube_vertex_buffer: Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
                 data: cube::CUBE_VERTICES.as_slice().as_bytes(),
                 usage: vk::BufferUsageFlags::VERTEX_BUFFER,
@@ -92,12 +104,109 @@ impl CubeMapManager {
         }
     }
 
-    pub fn create_cube_image(&self, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, path: &Path) -> Image {
+    pub fn create_environment_maps(&self, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, path: &Path) -> EnvironmentMaps {
+        let (_equirectangular_texture, equirectangular_texture_descriptor_set) = self.load_equirectangular_texture(physical_device, command_pool, descriptor_manager, path);
+
+        let sky_box_buffer = command_pool.one_time_command_buffer();
+
+        // render skybox to cube map
+        let (sky_box_image, sky_box_face_views) = self.create_cube_image_with_individual_views(SKY_BOX_RESOLUTION, *sky_box_buffer);
+        let projection_matrix = vulkan_projection_matrix(90.0f32.to_radians(), 1.0, 0.1, 10.0);
+        for i in 0..6 {
+            draw_cube_face(&self.device, command_pool, &DrawCubeFaceInfo {
+                cube_face_view: sky_box_face_views[i],
+                cube_vertex_buffer: &self.cube_vertex_buffer,
+                resolution: SKY_BOX_RESOLUTION,
+                projection_matrix,
+                view_matrix: CUBE_CAPTURE_VIEWS[i],
+                pipeline: &self.cube_map_pipeline,
+                descriptor_sets: std::slice::from_ref(&equirectangular_texture_descriptor_set),
+            });
+        }
+        self.transition_image_for_sampling(*sky_box_buffer, &sky_box_image);
+        drop(sky_box_buffer);
+        for view in sky_box_face_views {
+            unsafe { self.device.destroy_image_view(view, None); }
+        }
+
+        let sky_box_texture = CubeMapTexture::create(self.device, sky_box_image, descriptor_manager);
+
+        let diffuse_buffer = command_pool.one_time_command_buffer();
+        // render diffuse map
+        let (diffuse_map_image, diffuse_map_face_view) = self.create_cube_image_with_individual_views(DIFFUSE_MAP_RESOLUTION, *diffuse_buffer);
+        for i in 0..6 {
+            draw_cube_face(&self.device, command_pool, &DrawCubeFaceInfo {
+                cube_face_view: diffuse_map_face_view[i],
+                cube_vertex_buffer: &self.cube_vertex_buffer,
+                resolution: DIFFUSE_MAP_RESOLUTION,
+                projection_matrix,
+                view_matrix: CUBE_CAPTURE_VIEWS[i],
+                pipeline: &self.diffuse_map_pipeline,
+                descriptor_sets: std::slice::from_ref(&sky_box_texture.descriptor_set),
+            });
+        }
+        self.transition_image_for_sampling(*diffuse_buffer, &diffuse_map_image);
+        drop(diffuse_buffer);
+        for view in diffuse_map_face_view {
+            unsafe { self.device.destroy_image_view(view, None); }
+        }
+        let diffuse_map_texture = CubeMapTexture::create(self.device, diffuse_map_image, descriptor_manager);
+
+        EnvironmentMaps {
+            sky_box_texture,
+            irradiance_map_texture: diffuse_map_texture,
+        }
+    }
+
+    fn transition_image_for_sampling(&self, command_buffer: CommandBuffer, image: &Image) {
+        image_transitions::transition_image_layout(&self.device, &command_buffer, image.vk_image, &TransitionProps {
+            old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+            src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            dst_access_mask: vk::AccessFlags2::SHADER_SAMPLED_READ,
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            layer_count: 6,
+        });
+    }
+
+    fn load_equirectangular_texture(&self, physical_device: &PhysicalDevice, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, path: &Path) -> (Texture, DescriptorSet) {
+        let img = image::open(path).unwrap();
+        let data = img.to_rgba32f();
+        let equirectangular_texture = Texture::create(self.device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
+            width: img.width(),
+            height: img.height(),
+            format: HDR_CUBE_MAP_FORMAT,
+            mip_levels: None,
+            data: data.as_bytes(),
+            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
+                min_filter: Some(vk::Filter::LINEAR),
+                mag_filter: Some(vk::Filter::LINEAR),
+                mip_map_mode: None,
+                address_mode_u: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+                address_mode_v: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            }),
+        });
+        let equirectangular_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(equirectangular_texture.image.image_view)
+            .sampler(equirectangular_texture.sampler);
+        let (descriptor_set, _set_layout) = descriptor_manager.descriptor_builder()
+            .bind_image(0, equirectangular_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .build()
+            .expect("Failed to build binding");
+        (equirectangular_texture, descriptor_set)
+    }
+
+    fn create_cube_image_with_individual_views(&self, resolution: u32, command_buffer: CommandBuffer) -> (Image, Vec<ImageView>) {
         let cube_image = Image::create_image(self.device, &ImageCreateInfo {
             image_type: ImageType::Cube,
-            width: 4096,
-            height: 4096,
-            format: vk::Format::R32G32B32A32_SFLOAT,
+            width: resolution,
+            height: resolution,
+            format: HDR_CUBE_MAP_FORMAT,
             tiling: vk::ImageTiling::OPTIMAL,
             usage: vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
             mip_levels: 1,
@@ -111,7 +220,7 @@ impl CubeMapManager {
             let view_ci = vk::ImageViewCreateInfo::builder()
                 .image(cube_image.vk_image)
                 .view_type(vk::ImageViewType::TYPE_2D)
-                .format(vk::Format::R32G32B32A32_SFLOAT)
+                .format(HDR_CUBE_MAP_FORMAT)
                 .subresource_range(vk::ImageSubresourceRange::builder()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_mip_level(0)
@@ -121,11 +230,9 @@ impl CubeMapManager {
                     .build()
                 )
                 ;
-           individual_views.push(unsafe { self.device.create_image_view(&view_ci, None) }.unwrap());
+            individual_views.push(unsafe { self.device.create_image_view(&view_ci, None) }.unwrap());
         }
-        let transition_buffer = command_pool.one_time_command_buffer();
-
-        transition_image_layout(&self.device, &transition_buffer, cube_image.vk_image,&TransitionProps {
+        transition_image_layout(&self.device, &command_buffer, cube_image.vk_image, &TransitionProps {
             old_layout: vk::ImageLayout::UNDEFINED,
             new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             src_stage_mask: vk::PipelineStageFlags2::TOP_OF_PIPE,
@@ -137,65 +244,7 @@ impl CubeMapManager {
             level_count: 1,
             layer_count: 6,
         });
-
-        let img = image::open(path).unwrap();
-        let data = img.to_rgba32f();
-        let equirectangular_texture = Texture::create(self.device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
-            width: img.width(),
-            height: img.height(),
-            format: vk::Format::R32G32B32A32_SFLOAT,
-            mip_levels: None,
-            data: data.as_bytes(),
-            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
-                min_filter: Some(vk::Filter::LINEAR),
-                mag_filter: Some(vk::Filter::LINEAR),
-                mip_map_mode: None,
-                address_mode_u: vk::SamplerAddressMode::CLAMP_TO_EDGE,
-                address_mode_v: vk::SamplerAddressMode::CLAMP_TO_EDGE,
-            }),
-        });
-
-
-        let equirectangular_image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(equirectangular_texture.image.image_view)
-            .sampler(equirectangular_texture.sampler);
-        let (descriptor_set, _set_layout) = descriptor_manager.descriptor_builder()
-            .bind_image(0, equirectangular_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
-            .build()
-            .expect("Failed to build binding");
-
-        let projection_matrix = vulkan_projection_matrix(90.0f32.to_radians(), 1.0, 0.1, 10.0);
-
-        for i in 0..6 {
-            draw_cube_face(&self.device, &self.cube_map_pipeline, descriptor_set, command_pool, &DrawCubeFaceInfo {
-                cube_face_view: individual_views[i],
-                cube_vertex_buffer: &self.cube_vertex_buffer,
-                resolution: 4096,
-                projection_matrix,
-                view_matrix: CUBE_CAPTURE_VIEWS[i],
-            });
-        }
-
-        // transition texture for sampling later
-        image_transitions::transition_image_layout(&self.device, &*transition_buffer, cube_image.vk_image, &TransitionProps {
-            old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-            dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-            src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-            dst_access_mask: vk::AccessFlags2::SHADER_SAMPLED_READ,
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: 1,
-            layer_count: 6,
-        });
-
-        for view in individual_views {
-            unsafe { self.device.destroy_image_view(view, None); }
-        }
-
-        cube_image
+        (cube_image, individual_views)
     }
 }
 
@@ -205,9 +254,11 @@ struct DrawCubeFaceInfo<'a> {
     resolution: u32,
     projection_matrix: Mat4,
     view_matrix: Mat4,
+    pipeline: &'a MaterialPipeline,
+    descriptor_sets: &'a [vk::DescriptorSet],
 }
 
-fn draw_cube_face(device: &Device, pipeline: &MaterialPipeline, equirectangular_texture_descriptor: DescriptorSet, command_pool: &CommandPool, draw_info: &DrawCubeFaceInfo) {
+fn draw_cube_face(device: &Device, command_pool: &CommandPool, draw_info: &DrawCubeFaceInfo) {
     let one_time_command_buffer = command_pool.one_time_command_buffer();
     let command_buffer = *one_time_command_buffer;
 
@@ -235,7 +286,7 @@ fn draw_cube_face(device: &Device, pipeline: &MaterialPipeline, equirectangular_
     // ----------------------------------------------------------
 
     // bind the cube map pipeline
-    unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.graphics_pipeline())}
+    unsafe { device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, draw_info.pipeline.graphics_pipeline())}
     let viewport = [vk::Viewport::builder()
         .x(0.0)
         .y(0.0)
@@ -255,7 +306,7 @@ fn draw_cube_face(device: &Device, pipeline: &MaterialPipeline, equirectangular_
     // bind the cube vertex data (we are drawing this without indices
     unsafe {
         device.cmd_bind_vertex_buffers(command_buffer, 0, std::slice::from_ref(&draw_info.cube_vertex_buffer.buffer), std::slice::from_ref(&0u64));
-        device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[equirectangular_texture_descriptor], &[]);
+        device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, draw_info.pipeline.pipeline_layout, 0, draw_info.descriptor_sets, &[]);
     }
 
     // draw
@@ -265,7 +316,7 @@ fn draw_cube_face(device: &Device, pipeline: &MaterialPipeline, equirectangular_
     };
     let push_data: &[u8] = bytemuck::cast_slice(std::slice::from_ref(&push_constant));
     unsafe {
-        device.cmd_push_constants(command_buffer, pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, push_data);
+        device.cmd_push_constants(command_buffer, draw_info.pipeline.pipeline_layout, vk::ShaderStageFlags::VERTEX, 0, push_data);
         device.cmd_draw(command_buffer, cube::CUBE_VERTICES.len() as u32, 1, 0, 0);
     }
 
@@ -278,12 +329,12 @@ pub struct CubeMap {
     sampler: vk::Sampler,
 }
 
-fn cube_map_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings) -> MaterialPipeline {
+fn cube_map_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, frag_shader_path: &Path) -> MaterialPipeline {
     let equirectangular_map_sampler = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[
         layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
     ]);
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/cubemap.vert_spv"));
-    let frag_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/cubemap.frag_spv"));
+    let frag_shader_module = ShaderModule::load_from_file(device, frag_shader_path);
     let main_function_name = CString::new("main").unwrap();
     let vertex_shader_stage_ci = vk::PipelineShaderStageCreateInfo::builder()
         .stage(vk::ShaderStageFlags::VERTEX)
@@ -319,7 +370,7 @@ fn cube_map_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Descript
         shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],
         push_constants: &[model_matrix_push_constant],
         extent: Extent2D { width: 128, height: 128 },
-        image_format: vk::Format::R32G32B32A32_SFLOAT,
+        image_format: HDR_CUBE_MAP_FORMAT,
         vertex_input,
         multisampling,
         rasterization_options: &RasterizationOptions::default(),

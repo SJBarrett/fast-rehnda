@@ -10,7 +10,7 @@ use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::material_server::MaterialPipelineHandle;
 use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, PbrMaterialUniforms, RenderObject};
-use crate::etna::cube_map::{CubeMap, CubeMapManager, CubeMapTexture};
+use crate::etna::cube_map::{CubeMap, CubeMapManager, CubeMapTexture, EnvironmentMaps};
 
 pub struct LoadedGltfMesh {
     pub mesh_handle: MeshHandle,
@@ -25,7 +25,7 @@ pub struct AssetManager {
     meshes: AHashMap<MeshHandle, Mesh>,
     materials: AHashMap<MaterialHandle, PbrMaterial>,
     pub cube_map_manager: CubeMapManager,
-    pub global_light_map: Option<(CubeMapTexture, MaterialPipelineHandle)>,
+    pub global_light_map: Option<(EnvironmentMaps, MaterialPipelineHandle)>,
 }
 
 impl AssetManager {
@@ -43,8 +43,8 @@ impl AssetManager {
     }
 
     pub fn load_global_light_map(&mut self, light_map_path: &Path, descriptor_manager: &mut DescriptorManager, pipeline: MaterialPipelineHandle) {
-        let img = self.cube_map_manager.create_cube_image(&self.physical_device, &self.resource_command_pool, descriptor_manager, light_map_path);
-        self.global_light_map = Some((CubeMapTexture::create(self.device, img, descriptor_manager), pipeline));
+        let img = self.cube_map_manager.create_environment_maps(&self.physical_device, &self.resource_command_pool, descriptor_manager, light_map_path);
+        self.global_light_map = Some((img, pipeline));
     }
 
     pub fn load_gltf(&mut self, gltf_path: &Path, descriptor_manager: &mut DescriptorManager, pipeline: MaterialPipelineHandle) -> Vec<RenderObject> {
