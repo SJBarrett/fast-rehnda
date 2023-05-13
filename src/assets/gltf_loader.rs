@@ -7,6 +7,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use ash::vk;
 use bytemuck::{Pod, Zeroable};
+use enumflags2::BitFlag;
 use glam::{Mat4, Quat};
 use gltf::{Accessor, Gltf, Node, Semantic};
 use gltf::buffer;
@@ -18,7 +19,7 @@ use lazy_static::lazy_static;
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::material_pipeline::DescriptorManager;
 use crate::rehnda_core::{ColorRgbaF, ConstPtr, Vec2, Vec3, Vec4};
-use crate::assets::render_object::{Mesh, PbrMaterial, PbrMaterialTextures, PbrMaterialUniforms};
+use crate::assets::render_object::{Mesh, PbrMaterial, PbrMaterialFeatureFlags, PbrMaterialOptions, PbrMaterialTextures, PbrMaterialUniforms};
 use crate::assets::Vertex;
 
 lazy_static! {
@@ -67,8 +68,7 @@ fn create_textureless_material(device: ConstPtr<Device>, physical_device: &Physi
         base_color_texture,
         normal_texture,
         occlusion_roughness_metallic_texture,
-    }), PbrMaterialUniforms {
-        use_textures: 0,
+    }), &PbrMaterialOptions {
         ..Default::default()
     })
 }
@@ -119,21 +119,29 @@ fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice
     assert_eq!(base_color_tex_coord_index.unwrap(), 0, "Currently only support loading gltf models with the attribute TEXCOORD_0");
     let base_color = ColorRgbaF::new_from_array(gltf_material.pbr_metallic_roughness().base_color_factor());
 
+    let mut material_features = PbrMaterialFeatureFlags::empty();
+
     let base_color_texture = base_color_texture.as_ref().map(|texture| {
+        material_features |= PbrMaterialFeatureFlags::AlbedoTexture;
         load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_SRGB)
     }).unwrap_or_else(|| {
         default_texture(device, physical_device, command_pool, descriptor_manager)
     });
 
     let normal_texture = gltf_material.normal_texture().map(|texture| {
+        material_features |= PbrMaterialFeatureFlags::NormalTexture;
         load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
     }).unwrap_or_else(|| {
         default_texture(device, physical_device, command_pool, descriptor_manager)
     });
 
     // TODO this assumes that occlusion always uses the R channel, metal B and roughness G. Metal and
-    // roughness are always together, but not necessarily occlusion
+    // roughness are always together, but not necessarily occlusiond
     let occlusion_roughness_metallic_texture = gltf_material.pbr_metallic_roughness().metallic_roughness_texture().map(|texture| {
+        material_features = material_features | PbrMaterialFeatureFlags::RoughnessTexture | PbrMaterialFeatureFlags::MetallicTexture;
+        if gltf_material.occlusion_texture().is_some() {
+            material_features |= PbrMaterialFeatureFlags::OcclusionTexture;
+        }
         load_gltf_texture(device, physical_device, command_pool, descriptor_manager, data_buffers, &texture.texture(), vk::Format::R8G8B8A8_UNORM)
     }).unwrap_or_else(|| {
         default_texture(device, physical_device, command_pool, descriptor_manager)
@@ -148,8 +156,9 @@ fn load_gltf_material(device: ConstPtr<Device>, physical_device: &PhysicalDevice
             normal_texture,
             occlusion_roughness_metallic_texture,
         }),
-        PbrMaterialUniforms {
+        &PbrMaterialOptions {
             base_color,
+            features: material_features,
             ..Default::default()
         },
     )

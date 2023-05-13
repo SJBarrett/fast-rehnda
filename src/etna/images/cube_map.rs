@@ -78,7 +78,7 @@ pub struct CubeMapManager {
     pub cube_vertex_buffer: Buffer,
 }
 
-const HDR_CUBE_MAP_FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
+const HDR_CUBE_MAP_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 const SKY_BOX_RESOLUTION: u32 = 4096;
 const DIFFUSE_MAP_RESOLUTION: u32 = 256;
 
@@ -179,7 +179,7 @@ impl CubeMapManager {
         let equirectangular_texture = Texture::create(self.device, physical_device, command_pool, descriptor_manager, &TextureCreateInfo {
             width: img.width(),
             height: img.height(),
-            format: HDR_CUBE_MAP_FORMAT,
+            format: vk::Format::R32G32B32A32_SFLOAT,
             mip_levels: None,
             data: data.as_bytes(),
             sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {

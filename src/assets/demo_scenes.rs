@@ -3,6 +3,7 @@ use std::path::Path;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::EntityCommands;
 use bevy_hierarchy::{BuildChildren};
+use enumflags2::BitFlag;
 use glam::{EulerRot, Quat};
 
 use crate::etna::{material_pipeline, Swapchain};
@@ -11,7 +12,7 @@ use crate::rehnda_core::{ColorRgbaF, Vec3};
 use crate::assets::{AssetManager, Camera, skybox};
 use crate::assets::light_source::PointLight;
 use crate::assets::material_server::{MaterialServer, Shader};
-use crate::assets::render_object::{PbrMaterialUniforms, RenderObject, Transform};
+use crate::assets::render_object::{PbrMaterialFeatureFlags, PbrMaterialOptions, PbrMaterialUniforms, RenderObject, Transform};
 use crate::assets::skybox::SkyBox;
 
 #[derive(Component)]
@@ -36,13 +37,13 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
 
     for x_index in 0..5 {
         for y_index in 0..2 {
-            let roughness =  0.25 * x_index as f32;
+            let roughness = 0.25 * x_index as f32;
             let metallic = 1.0 * y_index as f32;
-            let new_material = asset_manager.duplicate_material_with_uniforms(&sphere_model.material_instance_handle, &mut descriptor_manager, PbrMaterialUniforms {
+            let new_material = asset_manager.duplicate_material_with_uniforms(&sphere_model.material_instance_handle, &mut descriptor_manager, &PbrMaterialOptions {
                 base_color: ColorRgbaF::new(0.7, 0.1, 0.1, 1.0),
                 roughness,
                 metallic,
-                use_textures: 0,
+                features: PbrMaterialFeatureFlags::empty(),
             });
             let mut sphere_object = sphere_model;
             sphere_object.material_instance_handle = new_material;
@@ -60,6 +61,48 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
         }
     }
 
+    let flight_helmet = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/FlightHelmet/glTF/FlightHelmet.glb"), &mut descriptor_manager, pbr_material);
+    add_model_to_parent(commands.spawn((
+        Actor {
+            name: "FlightHelmet".into(),
+        },
+        Transform {
+            translation: (3.5, -1.15, 0.0).into(),
+            rotation: Quat::IDENTITY,
+            scale: Vec3::splat(4.0),
+        },
+        ShouldDrawDebug,
+    )), flight_helmet.as_slice(),
+    );
+
+    let floor = asset_manager.load_gltf(Path::new("../assets/Floor/floor_material.glb"), &mut descriptor_manager, pbr_material);
+    add_model_to_parent(commands.spawn((
+        Actor {
+            name: "Floor".into(),
+        },
+        Transform {
+            translation: (0.0, -1.75, 0.0).into(),
+            rotation: Quat::IDENTITY,
+            scale: Vec3::splat(4.0),
+        },
+        ShouldDrawDebug,
+    )), floor.as_slice(),
+    );
+
+    let water_bottle = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager, pbr_material);
+    add_model_to_parent(commands.spawn((
+        Actor {
+            name: "WaterBottle".into(),
+        },
+        Transform {
+            translation: (-3.5, 0.15, 0.0).into(),
+            rotation: Quat::IDENTITY,
+            scale: Vec3::splat(10.0),
+        },
+        ShouldDrawDebug,
+    )), water_bottle.as_slice(),
+    );
+
     let light_bulb_model = asset_manager.load_gltf(Path::new("../glTF-Sample-Models/2.0/WaterBottle/glTF-Binary/WaterBottle.glb"), &mut descriptor_manager, unlit_material);
     let light_bulb_entity = commands.spawn((
         Actor {
@@ -71,7 +114,7 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
         },
         PointLight {
             light_color: (1.0, 1.0, 1.0).into(),
-            emissivity: 500.0,
+            emissivity: 1000.0,
         },
         ShouldDrawDebug,
     ));

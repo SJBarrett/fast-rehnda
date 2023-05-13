@@ -2,6 +2,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 
 use ahash::AHashMap;
+use bevy_ecs::system::adapter::new;
 use bevy_ecs::system::Resource;
 
 use crate::etna::{CommandPool, Device, Image, PhysicalDevice};
@@ -9,7 +10,7 @@ use crate::etna::material_pipeline::{DescriptorManager};
 use crate::rehnda_core::ConstPtr;
 use crate::assets::gltf_loader;
 use crate::assets::material_server::MaterialPipelineHandle;
-use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, PbrMaterialUniforms, RenderObject};
+use crate::assets::render_object::{MaterialHandle, Mesh, PbrMaterial, PbrMaterialOptions, PbrMaterialUniforms, RenderObject};
 use crate::etna::cube_map::{CubeMap, CubeMapManager, CubeMapTexture, EnvironmentMaps};
 
 pub struct LoadedGltfMesh {
@@ -68,9 +69,9 @@ impl AssetManager {
         }).collect()
     }
 
-    pub fn duplicate_material_with_uniforms(&mut self, material: &MaterialHandle, descriptor_manager: &mut DescriptorManager, new_uniforms: PbrMaterialUniforms) -> MaterialHandle {
+    pub fn duplicate_material_with_uniforms(&mut self, material: &MaterialHandle, descriptor_manager: &mut DescriptorManager, new_options: &PbrMaterialOptions) -> MaterialHandle {
         let material = self.materials.get(material).unwrap();
-        let new_material = material.copy_with_new_uniforms(self.device, &self.resource_command_pool, descriptor_manager, new_uniforms);
+        let new_material = material.copy_with_new_uniforms(self.device, &self.resource_command_pool, descriptor_manager, new_options);
         let handle = MaterialHandle::new(self.materials.len() as u32);
         self.materials.insert(handle, new_material);
         handle

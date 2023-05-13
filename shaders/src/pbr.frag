@@ -10,7 +10,7 @@ layout(set = 1, binding = 0) uniform MaterialProps {
     vec4 base_color;
     float base_roughness;
     float base_metallic;
-    int use_textures;
+    uint enabled_features;
 } material_props;
 layout(set = 1, binding = 1) uniform sampler2D base_color_sampler;
 layout(set = 1, binding = 2) uniform sampler2D normal_sampler;
@@ -41,6 +41,13 @@ float geometry_smith(vec3 normal, vec3 view_direction, vec3 light_direction, flo
 vec3 fresnel_schlick(float cos_theta, vec3 f0);
 vec3 fresnel_schlick_with_roughness(float cos_theta, vec3 f0, float roughness);
 
+// MUST KEEP IN SYNC WITH PbrMaterialFeatureFlags
+const uint ALBEDO_TEXTURE_FLAG = 1 << 0;
+const uint NORMAL_TEXTURE_FLAG = 1 << 1;
+const uint ROUGHNESS_TEXTURE_FLAG = 1 << 2;
+const uint METALLIC_TEXTURE_FLAG = 1 << 3;
+const uint OCCLUSION_TEXTURE_FLAG = 1 << 4;
+
 void main() {
     float occlusion = 1;
     float roughness = material_props.base_roughness;
@@ -48,14 +55,22 @@ void main() {
     vec3 albedo = material_props.base_color.rgb;
     vec3 normal = normalize(vs_out.tbn[2]);
 
-    if (material_props.use_textures == 1) {
-        occlusion *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).r;
-        roughness *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).g;
-        metallic *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).b;
+    if (bool(material_props.enabled_features & ALBEDO_TEXTURE_FLAG)) {
         albedo *= texture(base_color_sampler, vs_out.tex_coord).rgb;
+    }
+    if (bool(material_props.enabled_features & NORMAL_TEXTURE_FLAG)) {
         normal = texture(normal_sampler, vs_out.tex_coord).rgb;
         normal = normal * 2.0 - 1.0;
         normal = normalize(vs_out.tbn * normal);
+    }
+    if (bool(material_props.enabled_features & ROUGHNESS_TEXTURE_FLAG)) {
+        roughness *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).g;
+    }
+    if (bool(material_props.enabled_features & METALLIC_TEXTURE_FLAG)) {
+        metallic *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).b;
+    }
+    if (bool(material_props.enabled_features & OCCLUSION_TEXTURE_FLAG)) {
+        occlusion *= texture(occlusion_roughness_metal_sampler, vs_out.tex_coord).r;
     }
 
     vec3 view_direction = normalize(transforms.camera_position.xyz - vs_out.position);

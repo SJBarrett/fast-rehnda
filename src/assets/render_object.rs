@@ -4,6 +4,7 @@ use std::sync::Arc;
 use ash::vk;
 use bevy_ecs::prelude::*;
 use bytemuck_derive::{Pod, Zeroable};
+use enumflags2::{BitFlag, bitflags, BitFlags};
 
 use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, Texture};
 use crate::etna::material_pipeline::DescriptorManager;
@@ -51,10 +52,41 @@ pub struct Mesh {
 pub type MaterialHandle = AssetHandle<PbrMaterial>;
 
 pub struct PbrMaterial {
-    uniforms: PbrMaterialUniforms,
+    options: PbrMaterialOptions,
     textures: Arc<PbrMaterialTextures>,
     descriptor_set: vk::DescriptorSet,
     uniform_buffer: Buffer,
+}
+
+
+#[bitflags]
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PbrMaterialFeatureFlags {
+    AlbedoTexture = 1 << 0,
+    NormalTexture = 1 << 1,
+    RoughnessTexture = 1 << 2,
+    MetallicTexture = 1 << 3,
+    OcclusionTexture = 1 << 4,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct PbrMaterialOptions {
+    pub base_color: ColorRgbaF,
+    pub roughness: f32,
+    pub metallic: f32,
+    pub features: BitFlags<PbrMaterialFeatureFlags>,
+}
+
+impl Default for PbrMaterialOptions {
+    fn default() -> Self {
+        Self {
+            base_color: ColorRgbaF::WHITE,
+            roughness: 1.0,
+            metallic: 1.0,
+            features: PbrMaterialFeatureFlags::empty(),
+        }
+    }
 }
 
 #[repr(C)]
@@ -63,19 +95,20 @@ pub struct PbrMaterialUniforms {
     pub base_color: ColorRgbaF,
     pub roughness: f32,
     pub metallic: f32,
-    pub use_textures: i32,
+    pub enabled_feature_flags: u32,
 }
 
-impl Default for PbrMaterialUniforms {
-    fn default() -> Self {
+impl PbrMaterialUniforms {
+    fn from_options(options: &PbrMaterialOptions) -> Self {
         Self {
-            base_color: ColorRgbaF::WHITE,
-            roughness: 1.0,
-            metallic: 1.0,
-            use_textures: 1,
+            base_color: options.base_color,
+            roughness: options.roughness,
+            metallic: options.metallic,
+            enabled_feature_flags: options.features.bits(),
         }
     }
 }
+
 
 pub struct PbrMaterialTextures {
     pub base_color_texture: Texture,
@@ -88,8 +121,8 @@ impl PbrMaterial {
         self.descriptor_set
     }
 
-    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, textures: Arc<PbrMaterialTextures>, uniforms: PbrMaterialUniforms) -> Self {
-        let uniform = [uniforms];
+    pub fn create(device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, textures: Arc<PbrMaterialTextures>, options: &PbrMaterialOptions) -> Self {
+        let uniform = [PbrMaterialUniforms::from_options(options)];
         let uniform_data: &[u8] = bytemuck::cast_slice(&uniform);
         let uniform_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: uniform_data,
@@ -121,14 +154,14 @@ impl PbrMaterial {
             .expect("Failed to allocate bindings");
         Self {
             textures,
-            uniforms,
+            options: *options,
             descriptor_set,
             uniform_buffer,
         }
     }
 
-    pub fn copy_with_new_uniforms(&self, device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, uniforms: PbrMaterialUniforms) -> Self {
-        let uniform = [uniforms];
+    pub fn copy_with_new_uniforms(&self, device: ConstPtr<Device>, command_pool: &CommandPool, descriptor_manager: &mut DescriptorManager, options: &PbrMaterialOptions) -> Self {
+        let uniform = [PbrMaterialUniforms::from_options(options)];
         let uniform_data: &[u8] = bytemuck::cast_slice(&uniform);
         let uniform_buffer = Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
             data: uniform_data,
@@ -160,7 +193,7 @@ impl PbrMaterial {
             .expect("Failed to allocate bindings");
         Self {
             textures: self.textures.clone(),
-            uniforms,
+            options: *options,
             descriptor_set,
             uniform_buffer,
         }
