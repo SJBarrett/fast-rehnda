@@ -4,7 +4,6 @@ use std::mem::size_of;
 use ash::vk;
 use bevy_ecs::prelude::*;
 use bevy_hierarchy::Children;
-use gltf::json::Asset;
 
 use crate::etna::{CommandPool, Device, HostMappedBuffer, HostMappedBufferCreateInfo, image_transitions, PhysicalDeviceRes, Swapchain, SwapchainResult, vkinit};
 use crate::etna::material_pipeline::{DescriptorManager, MaterialPipeline, ModelPushConstants};
