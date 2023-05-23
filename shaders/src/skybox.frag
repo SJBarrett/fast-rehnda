@@ -6,5 +6,7 @@ layout(location = 0) out vec4 out_color;
 layout(set = 1, binding = 0) uniform samplerCube cube_map;
 
 void main() {
-    out_color = vec4(texture(cube_map, in_position).rgb, 1.0);
+    vec3 color = texture(cube_map, in_position).rgb;
+    color = color / (color + vec3(1.0));
+    out_color = vec4(color, 1.0);
 }

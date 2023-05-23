@@ -24,6 +24,8 @@ layout(set = 2, binding = 0) uniform PointLight {
 } point_light;
 
 layout(set = 3, binding = 0) uniform samplerCube irradiance_map;
+layout(set = 3, binding = 1) uniform samplerCube prefilter_map;
+layout(set = 3, binding = 2) uniform sampler2D brdf_lut;
 
 layout(location = 0) in VS_OUT {
     vec3 position;
@@ -74,6 +76,7 @@ void main() {
     }
 
     vec3 view_direction = normalize(transforms.camera_position.xyz - vs_out.position);
+    vec3 reflection_direction = reflect(-view_direction, normal);
     vec3 f0 = vec3(0.04);
     f0 = mix(f0, albedo, metallic);
 
@@ -107,12 +110,22 @@ void main() {
     // ------------------------ end per light calculations ------------------------
 
     // ambient lighting
-    vec3 k_specular = fresnel_schlick_with_roughness(max(dot(normal, view_direction), 0.0), f0, roughness);
+    vec3 fresnel = fresnel_schlick_with_roughness(max(dot(normal, view_direction), 0.0), f0, roughness);
+
+    vec3 k_specular = fresnel;
     vec3 k_diffuse = 1.0 - k_specular;
     k_diffuse *= 1.0 - metallic;
+
     vec3 irradiance = texture(irradiance_map, normal).rgb;
     vec3 diffuse = irradiance * albedo;
-    vec3 ambient = (k_diffuse * diffuse) * occlusion;
+
+    // sample both the pre-filter map and the BRDF lut and combine them together as per the Split-Sum approximation to get the IBL specular part.
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefiltered_color = textureLod(prefilter_map, reflection_direction, roughness * MAX_REFLECTION_LOD).rgb;
+    vec2 brdf = texture(brdf_lut, vec2(max(dot(normal, view_direction), 0.0), roughness)).rg;
+    vec3 specular = prefiltered_color * (fresnel * brdf.x + brdf.y);
+
+    vec3 ambient = (k_diffuse * diffuse + specular) * occlusion;
 
     vec3 color = ambient + accumulated_lighting;
 

@@ -55,7 +55,7 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
                     translation: ((x_index as f32 - 2.0), -(y_index as f32 - 0.5), 0.0).into(),
                     rotation: Quat::IDENTITY,
                     scale: Vec3::splat(0.3),
-                }
+                },
             ));
             add_model_to_parent(sphere, std::slice::from_ref(&sphere_object));
         }
@@ -114,7 +114,7 @@ pub fn spheres_scene(mut commands: Commands, swapchain: Res<Swapchain>, mut asse
         },
         PointLight {
             light_color: (1.0, 1.0, 1.0).into(),
-            emissivity: 1000.0,
+            emissivity: 100.0,
         },
         ShouldDrawDebug,
     ));

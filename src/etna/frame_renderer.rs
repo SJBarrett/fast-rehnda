@@ -140,7 +140,7 @@ fn draw_sky_box(device: &Device, swapchain: &Swapchain, frame_data: &FrameData, 
 
         bind_material_pipeline(device, swapchain, pipeline, frame_data);
         unsafe {
-            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, environment_maps.sky_box_texture.descriptor_set], &[]);
+            device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, environment_maps.sky_box_descriptor_set], &[]);
             device.cmd_bind_vertex_buffers(frame_data.command_buffer, 0, std::slice::from_ref(&asset_manager.cube_map_manager.cube_vertex_buffer.buffer), std::slice::from_ref(&0u64));
             device.cmd_draw(frame_data.command_buffer, cube::CUBE_VERTICES.len() as u32, 1, 0, 0);
         }
@@ -204,7 +204,7 @@ fn bind_material_pipeline(device: &Device, swapchain: &Swapchain, pipeline: &Mat
 
 fn bind_material(device: &Device, frame_data: &FrameData, pipeline: &MaterialPipeline, material: &PbrMaterial, light_data: &LightingDataManager, environment_maps: &EnvironmentMaps) {
     unsafe {
-        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set(), light_data.descriptor_set, environment_maps.irradiance_map_texture.descriptor_set], &[]);
+        device.cmd_bind_descriptor_sets(frame_data.command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline_layout, 0, &[frame_data.global_descriptor, material.descriptor_set(), light_data.descriptor_set, environment_maps.ibl_descriptor_set], &[]);
     }
 }
 

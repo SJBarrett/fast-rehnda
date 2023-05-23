@@ -30,6 +30,8 @@ pub fn textured_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Desc
     ]);
     let environment_map_set = descriptor_manager.layout_cache.create_descriptor_layout_for_binding(&[
         layout_binding(0, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(1, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
+        layout_binding(2, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT),
     ]);
     let vert_shader_module = ShaderModule::load_from_file(device, Path::new(vert_shader_path));
     let frag_shader_module = ShaderModule::load_from_file(device, Path::new(frag_shader_path));

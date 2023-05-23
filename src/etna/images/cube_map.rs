@@ -8,7 +8,7 @@ use crevice::std140::{AsStd140, Std140};
 use image::{EncodableLayout};
 use lazy_static::lazy_static;
 use crate::assets::{cube, vulkan_projection_matrix};
-use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, ImageType, MsaaSamples, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
+use crate::etna::{Buffer, BufferCreateInfo, CommandPool, Device, FramebufferCreateInfo, GraphicsSettings, HostMappedBuffer, HostMappedBufferCreateInfo, Image, image_transitions, ImageCreateInfo, ImageType, MsaaSamples, PhysicalDevice, SamplerOptions, TexSamplerOptions, Texture, TextureCreateInfo};
 use crate::etna::image_transitions::{transition_image_layout, TransitionProps};
 use crate::etna::material_pipeline::{DescriptorManager, layout_binding, MaterialPipeline, PipelineCreateInfo, PipelineMultisamplingInfo, PipelineVertexInputDescription, RasterizationOptions};
 use crate::etna::shader::ShaderModule;
@@ -18,7 +18,6 @@ pub struct CubeMapTexture {
     device: ConstPtr<Device>,
     pub image: Image,
     pub sampler: vk::Sampler,
-    pub descriptor_set: vk::DescriptorSet,
 }
 
 impl Drop for CubeMapTexture {
@@ -51,22 +50,10 @@ impl CubeMapTexture {
             ;
         let sampler = unsafe { device.create_sampler(&sampler_ci, None) }.unwrap();
 
-
-        let cube_map_image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(image.image_view)
-            .sampler(sampler);
-
-
-        let (descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
-            .bind_image(0, cube_map_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
-            .build()
-            .expect("Failed to allocate bindings");
         Self {
             device,
             image,
             sampler,
-            descriptor_set,
         }
     }
 }
@@ -76,7 +63,9 @@ pub struct CubeMapManager {
     pub cube_map_pipeline: MaterialPipeline,
     pub diffuse_map_pipeline: MaterialPipeline,
     pub prefilter_map_pipeline: MaterialPipeline,
+    pub brdf_lut_pipeline: MaterialPipeline,
     pub cube_vertex_buffer: Buffer,
+    pub screen_quad_vertex_buffer: Buffer,
 }
 
 const HDR_CUBE_MAP_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
@@ -84,11 +73,15 @@ const SKY_BOX_RESOLUTION: u32 = 4096;
 const DIFFUSE_MAP_RESOLUTION: u32 = 256;
 const SPECULAR_MAP_RESOLUTION: u32 = 512;
 const SPECULAR_MAX_MIP_LEVELS: u32 = 5;
+const BRDF_LUT_TEXTURE_RESOLUTION: u32 = 512;
 
 pub struct EnvironmentMaps {
     pub sky_box_texture: CubeMapTexture,
+    pub sky_box_descriptor_set: vk::DescriptorSet,
     pub irradiance_map_texture: CubeMapTexture,
     pub prefilter_map_texture: CubeMapTexture,
+    pub brdf_lut_texture: Texture,
+    pub ibl_descriptor_set: vk::DescriptorSet,
 }
 
 impl CubeMapManager {
@@ -114,8 +107,15 @@ impl CubeMapManager {
                 frag_shader_path: Path::new("shaders/spirv/prefilter.frag_spv"),
                 additional_descriptor_sets: &[prefilter_params_buffer],
             }),
+            brdf_lut_pipeline: screen_quad_pipeline(device, descriptor_manager, &settings, &ScreenQuadPipelineProps {
+                frag_shader_path: Path::new("shaders/spirv/brdf_lut.frag_spv")
+            }),
             cube_vertex_buffer: Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
                 data: cube::CUBE_VERTICES.as_slice().as_bytes(),
+                usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+            }),
+            screen_quad_vertex_buffer: Buffer::create_and_initialize_buffer_with_staging_buffer(device, command_pool, BufferCreateInfo {
+                data: cube::SCREEN_QUAD_VERTICES.as_slice().as_bytes(),
                 usage: vk::BufferUsageFlags::VERTEX_BUFFER,
             }),
         }
@@ -145,6 +145,15 @@ impl CubeMapManager {
         drop(sky_box_buffer);
 
         let sky_box_texture = CubeMapTexture::create(self.device, sky_box_image, descriptor_manager);
+        let sky_box_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(sky_box_texture.image.image_view)
+            .sampler(sky_box_texture.sampler);
+
+        let (sky_box_descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
+            .bind_image(0, sky_box_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .build()
+            .expect("Failed to allocate bindings");
 
         let diffuse_buffer = command_pool.one_time_command_buffer();
         // render diffuse map
@@ -158,7 +167,7 @@ impl CubeMapManager {
                 projection_matrix,
                 view_matrix: CUBE_CAPTURE_VIEWS[i],
                 pipeline: &self.diffuse_map_pipeline,
-                descriptor_sets: std::slice::from_ref(&sky_box_texture.descriptor_set),
+                descriptor_sets: std::slice::from_ref(&sky_box_descriptor_set),
             });
         }
         self.transition_image_for_sampling(*diffuse_buffer, &diffuse_map_image, 1);
@@ -190,17 +199,42 @@ impl CubeMapManager {
                 projection_matrix,
                 view_matrix: CUBE_CAPTURE_VIEWS[i],
                 pipeline: &self.prefilter_map_pipeline,
-                descriptor_sets: &[sky_box_texture.descriptor_set, prefilter_params_set],
+                descriptor_sets: &[sky_box_descriptor_set, prefilter_params_set],
             }, &prefilter_params_buffer);
         }
         self.transition_image_for_sampling(*specular_buffer, &specular_map_image, SPECULAR_MAX_MIP_LEVELS);
         drop(specular_buffer);
         let specular_map_texture = CubeMapTexture::create(self.device, specular_map_image, descriptor_manager);
 
+        let brdf_lut_texture = self.draw_brdf_lut(physical_device, command_pool);
+
+        let irradiance_map_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(diffuse_map_texture.image.image_view)
+            .sampler(diffuse_map_texture.sampler);
+        let prefilter_map_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(specular_map_texture.image.image_view)
+            .sampler(specular_map_texture.sampler);
+        let brdf_lut_image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(brdf_lut_texture.image.image_view)
+            .sampler(brdf_lut_texture.sampler);
+
+        let (ibl_descriptor_set, _descriptor_set_layout) = descriptor_manager.descriptor_builder()
+            .bind_image(0, irradiance_map_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_image(1, prefilter_map_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .bind_image(2, brdf_lut_image_info, vk::DescriptorType::COMBINED_IMAGE_SAMPLER, vk::ShaderStageFlags::FRAGMENT)
+            .build()
+            .expect("Failed to allocate bindings");
+
         EnvironmentMaps {
             sky_box_texture,
+            sky_box_descriptor_set,
             irradiance_map_texture: diffuse_map_texture,
             prefilter_map_texture: specular_map_texture,
+            brdf_lut_texture,
+            ibl_descriptor_set,
         }
     }
 
@@ -274,6 +308,97 @@ impl CubeMapManager {
             layer_count: 6,
         });
         cube_image
+    }
+
+    fn draw_brdf_lut(&self, physical_device: &PhysicalDevice, command_pool: &CommandPool) -> Texture {
+        let brdf_lut_texture = Texture::create_framebuffer(self.device, physical_device, command_pool, &FramebufferCreateInfo {
+            width: BRDF_LUT_TEXTURE_RESOLUTION,
+            height: BRDF_LUT_TEXTURE_RESOLUTION,
+            format: vk::Format::R16G16_SFLOAT,
+            usage: vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            mip_levels: None,
+            sampler_info: SamplerOptions::FilterOptions(&TexSamplerOptions {
+                min_filter: Some(vk::Filter::LINEAR),
+                mag_filter: Some(vk::Filter::LINEAR),
+                mip_map_mode: None,
+                address_mode_u: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+                address_mode_v: vk::SamplerAddressMode::CLAMP_TO_EDGE,
+            }),
+        });
+
+        let one_time_command_buffer = command_pool.one_time_command_buffer();
+        let command_buffer = *one_time_command_buffer;
+
+        // ------------------ setup the render pass ------------------
+        let clear_color = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.52, 0.8, 0.92, 1.0]
+            }
+        };
+        let color_attachment_info = vk::RenderingAttachmentInfo::builder()
+            .image_view(brdf_lut_texture.image.image_view)
+            .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .resolve_mode(vk::ResolveModeFlags::NONE)
+            .clear_value(clear_color);
+        let rendering_info = vk::RenderingInfo::builder()
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: vk::Extent2D { width: BRDF_LUT_TEXTURE_RESOLUTION, height: BRDF_LUT_TEXTURE_RESOLUTION },
+            })
+            .layer_count(1)
+            .color_attachments(std::slice::from_ref(&color_attachment_info));
+        unsafe { self.device.cmd_begin_rendering(command_buffer, &rendering_info) };
+        // ----------------------------------------------------------
+
+        // bind the cube map pipeline
+        unsafe { self.device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.brdf_lut_pipeline.graphics_pipeline()) }
+        let viewport = [vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(BRDF_LUT_TEXTURE_RESOLUTION as f32)
+            .height(BRDF_LUT_TEXTURE_RESOLUTION as f32)
+            .min_depth(0.0)
+            .max_depth(1.0)
+            .build()];
+        unsafe { self.device.cmd_set_viewport(command_buffer, 0, &viewport); }
+
+        let scissor = [vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(Extent2D { width: BRDF_LUT_TEXTURE_RESOLUTION, height: BRDF_LUT_TEXTURE_RESOLUTION })
+            .build()];
+        unsafe { self.device.cmd_set_scissor(command_buffer, 0, &scissor); }
+
+        // bind the cube vertex data (we are drawing this without indices
+        unsafe {
+            self.device.cmd_bind_vertex_buffers(command_buffer, 0, std::slice::from_ref(&self.screen_quad_vertex_buffer.buffer), std::slice::from_ref(&0u64));
+        }
+
+        // draw
+        unsafe {
+            self.device.cmd_draw(command_buffer, cube::SCREEN_QUAD_VERTICES.len() as u32, 1, 0, 0);
+        }
+
+        // ------------------  end the render pass ------------------
+        unsafe { self.device.cmd_end_rendering(command_buffer) };
+
+        image_transitions::transition_image_layout(&self.device, &command_buffer, brdf_lut_texture.image.vk_image, &TransitionProps {
+            old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
+            src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+            dst_access_mask: vk::AccessFlags2::SHADER_SAMPLED_READ,
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            layer_count: 1,
+        });
+
+        drop(one_time_command_buffer);
+
+        brdf_lut_texture
     }
 }
 
@@ -525,6 +650,51 @@ fn cube_map_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut Descript
         push_constants: &[model_matrix_push_constant],
         extent: Extent2D { width: 128, height: 128 },
         image_format: HDR_CUBE_MAP_FORMAT,
+        vertex_input,
+        multisampling,
+        rasterization_options: &RasterizationOptions::default(),
+    };
+
+    MaterialPipeline::create(device, &create_info)
+}
+
+struct ScreenQuadPipelineProps<'a> {
+    frag_shader_path: &'a Path,
+}
+
+fn screen_quad_pipeline(device: ConstPtr<Device>, descriptor_manager: &mut DescriptorManager, graphics_settings: &GraphicsSettings, props: &ScreenQuadPipelineProps) -> MaterialPipeline {
+    let vert_shader_module = ShaderModule::load_from_file(device, Path::new("shaders/spirv/screen_quad.vert_spv"));
+    let frag_shader_module = ShaderModule::load_from_file(device, props.frag_shader_path);
+    let main_function_name = CString::new("main").unwrap();
+    let vertex_shader_stage_ci = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::VERTEX)
+        .module(vert_shader_module.handle())
+        .name(main_function_name.as_c_str())
+        .build();
+    let frag_shader_stage_ci = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::FRAGMENT)
+        .module(frag_shader_module.handle())
+        .name(main_function_name.as_c_str())
+        .build();
+
+    let multisampling = PipelineMultisamplingInfo {
+        msaa_samples: graphics_settings.msaa_samples,
+        enable_sample_rate_shading: graphics_settings.sample_rate_shading_enabled,
+    };
+
+    let vertex_attributes = cube::screen_quad_vertex_attributes();
+    let vertex_input = PipelineVertexInputDescription {
+        bindings: &[cube::screen_quad_vertex_input_bindings()],
+        attributes: vertex_attributes.as_slice(),
+    };
+
+    let create_info = PipelineCreateInfo {
+        global_set_layouts: &[],
+        additional_descriptor_set_layouts: &[],
+        shader_stages: &[vertex_shader_stage_ci, frag_shader_stage_ci],
+        push_constants: &[],
+        extent: Extent2D { width: 128, height: 128 },
+        image_format: vk::Format::R16G16_SFLOAT,
         vertex_input,
         multisampling,
         rasterization_options: &RasterizationOptions::default(),
