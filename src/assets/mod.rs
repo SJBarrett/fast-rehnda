@@ -1,5 +1,5 @@
-mod asset_manager;
-pub use asset_manager::*;
+mod asset_manager_internal;
+pub use asset_manager_internal::*;
 mod camera;
 pub use camera::*;
 mod vertex;
