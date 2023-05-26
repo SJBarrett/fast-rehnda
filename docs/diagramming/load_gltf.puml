@@ -1,0 +1,86 @@
+@startuml
+
+
+participant Engine
+participant "AssetServer<Model>" as ModelLoader
+participant "AssetServer<Mesh>" as MeshLoader
+participant "AssetServer<Image>" as ImageLoader
+participant "AssetServer<Sampler>" as SamplerLoader
+participant "AssetServer<Material>" as MaterialLoader
+participant "AssetServer<MaterialInstanceLoader>" as MaterialInstanceLoader
+participant ResourceLoader
+
+Engine -> ModelLoader++: load_resource("models.box")
+    ModelLoader -> ModelLoader: Create handle (state=LOADING)
+ModelLoader --> Engine: Handle<Model>
+    ModelLoader -> ResourceLoader++: load_resource_data("models.box")
+        ResourceLoader -> ResourceLoader: findResourceFile
+        alt File system
+            ResourceLoader -> FileSystem: Open "models/box"
+        else Pack file
+            ResourceLoader -> ResourceLoader: lookup pack file and offset
+        end
+        return bytes
+    ModelLoader -> ModelLoader: Parse model metadata
+    ModelLoader -> MeshLoader++: load({ vert_bytes, index_bytes })
+        MeshLoader -> MeshLoader: Create handle (state=LOADING)
+        MeshLoader --> ModelLoader: Handle<Mesh>
+
+   
+
+    loop for each texture
+
+        ModelLoader -> ImageLoader++: load({ img_bytes, format })
+            ImageLoader -> ImageLoader: Create handle (state=LOADING)
+            ImageLoader --> ModelLoader: Handle<Image>
+            ImageLoader -> GPU: CreateImage
+            ImageLoader -> GPU: Submit command to copy data to image
+            ImageLoader -> GPU: Blit image (generate mips)
+        ModelLoader -> SamplerLoader++: load({ sampler_create_options })
+            SamplerLoader -> SamplerLoader: Create handle (state=LOADING)
+            SamplerLoader --> ModelLoader: Handle<Sampler>
+            SamplerLoader -> GPU: CreateSampler
+    end
+    SamplerLoader -> SamplerLoader: HandleState = LOADED
+    deactivate SamplerLoader
+    ModelLoader -> MaterialLoader++: load(shader_name)
+        MaterialLoader -> MaterialLoader: Get existing handle (state=LOADED)
+    MaterialLoader --> ModelLoader--: Handle<Material>
+
+    ModelLoader -> MaterialInstanceLoader++: load({ texture_handles })
+        MaterialInstanceLoader -> MaterialInstanceLoader: Create handle (state=LOADING)
+    MaterialInstanceLoader --> ModelLoader: Handle<MaterialInstance>
+
+    ModelLoader -> ModelLoader: HandleState = LOADED
+    deactivate ModelLoader
+
+        note left of MaterialInstanceLoader
+            May need to wait for image and sampler 
+            loads to complete first, and only then
+            create a descriptor. 
+
+            May require a dependency concept.
+        end note
+        MaterialInstanceLoader -> ImageLoader: get(image_handle)
+        ImageLoader --> MaterialInstanceLoader: handle(state=LOADING)
+
+    
+    
+
+    ImageLoader -> ImageLoader: HandleState = LOADED
+    deactivate ImageLoader
+
+    MaterialInstanceLoader -> ImageLoader++: get(image_handle)
+    ImageLoader --> MaterialInstanceLoader--: handle(state=LOADED, image)
+    MaterialInstanceLoader -> GPU: Bind resources, create descriptor set and layout
+
+    MeshLoader -> MeshLoader: HandleState = LOADED
+    deactivate MeshLoader
+
+    MaterialInstanceLoader -> MaterialInstanceLoader: HandleState = LOADED
+    deactivate MaterialInstanceLoader
+    
+    
+    
+
+@enduml

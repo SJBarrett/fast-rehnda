@@ -1,0 +1,53 @@
+@startuml
+
+skin rose
+
+title Assets - Model
+
+
+struct Model {
+  mesh: Handle<Mesh>
+  material: Handle<Material>
+  material_instance: Handle<MaterialInstance>
+}
+
+struct Mesh {
+    vertex_buffer: vkBuffer
+    index_buffer: vkBuffer
+}
+
+struct Material {
+    pipeline: vkPipeline
+}
+
+struct MaterialInstance {
+    base_color: Handle<Image>
+    base_color_sampler: Handle<Sampler>
+    normal_map: Handle<Image>
+    normal_map_sampler: Handle<Sampler>
+    ...
+    base_color_value: f32
+    base_metaillic: f32
+    ...
+}
+
+struct Image {
+    image: vkImage
+    image_view: vkImageView
+}
+
+struct Sampler {
+    sampler: vkSampler
+}
+
+Model --o Mesh
+Model --o Material
+Model --o MaterialInstance
+
+Material -right- MaterialInstance: "Material instance must be\ncompatible with the material"
+
+MaterialInstance --o Image
+MaterialInstance --o Sampler
+
+
+@enduml
